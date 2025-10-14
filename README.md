@@ -2,8 +2,6 @@
 Counter_UAV_System is a multi-sensor, close-range UAV interception platform that integrates acoustic detection, LiDAR-based localization, and predictive targeting to neutralize drones using a pneumatic gun.
 The system uses a tetrahedral 4-microphone array for acoustic UAV detection and classification via Time Difference of Arrival (TDOA) and machine learning. A 3D conical LiDAR is used for precise localization and classification of UAVs using the PointPillars architecture. A predictive model estimates UAV velocity and future position to enable accurate aiming and firing of the pneumatic gun when the UAV is within range.
 
-# Counter_UAV_System
-
 ## 🛡️ Overview
 **Counter_UAV_System** is a close-range UAV interception platform that integrates acoustic and LiDAR-based sensing with predictive targeting to neutralize drones using a pneumatic gun.
 
