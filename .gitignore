@@ -1,3 +1,7 @@
+# Ignore all files in:
+Acoustics_system/Recordings/Four_mic_recordings 
+
+# Auto-generated .gitignore for a ROS Catkin workspace
 devel/
 logs/
 build/
