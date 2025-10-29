@@ -7,13 +7,13 @@ from datetime import datetime
 
 # ---------- Config ----------
 NUM_CHANNELS = 4
-FILE_DIR = "Acoustics_system/Recordings/Four_mic_recordings"
+FILE_DIR = "/home/ehb/Documents/GitHub/Counter_UAV_System/Acoustics_system/Recordings/Four_mic_recordings"
 SUBTYPE = "FLOAT"      # 32-bit float WAV to preserve dynamic range
 QUEUE_MAX = 128        # blocks; increase if your disk is slow
 
 # ---------- Keypress (q / ESC) ----------
 def wait_for_quit(flag):
-    input("Press Enter to stop recording...\n")
+    input("Press Enter (in the terminal) to stop recording...\n")
     flag["stop"] = True
 
 
@@ -53,9 +53,9 @@ def main():
             print(f"Warning: couldn't connect {src} -> {dst}. Check port names.", file=sys.stderr)
 
     print(f"Recording {NUM_CHANNELS} channels at {fs} Hz, blocksize {blocksize}.")
-    print("Press 'q' or ESC to stop.")
 
     # Prepare output file
+    os.makedirs(FILE_DIR, exist_ok=True)
     base = f"recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{fs}Hz_{NUM_CHANNELS}ch.wav"
     outpath = os.path.join(FILE_DIR, base)
     outfile = sf.SoundFile(outpath, mode="w", samplerate=fs, channels=NUM_CHANNELS, subtype=SUBTYPE)

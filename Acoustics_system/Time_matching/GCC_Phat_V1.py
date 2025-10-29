@@ -46,7 +46,7 @@ def gcc_phat(sig, refsig, fs=1, max_tau=None, interp=16):
 
     shift = np.argmax(np.abs(cc)) - max_shift
     tau = shift / float(interp * fs)
-    return tau, cc
+    return tau, cc, max_shift
 
 # === MAIN SCRIPT ===
 if __name__ == "__main__":
@@ -62,8 +62,45 @@ if __name__ == "__main__":
     ch1 = data[:, 0]
     ch2 = data[:, 1]
 
-    # Estimate time delay using GCC-PHAT
-    tau, _ = gcc_phat(ch1, ch2, fs=fs, interp=16)
+    # Extract from A seconds to B seconds
+    start = int(2 * fs) # A=2s
+    end = int(2.1 * fs) # B=2.1s
+    ch1_segment = ch1[start:end]
+    ch2_segment = ch2[start:end]
+    
 
-    print(f"Estimated delay: {tau:.6f} seconds")
-    print(f"= {tau * fs:.2f} samples")
+    # Create a delayed version (2 ms = 0.002 s)
+    delay_samples = int(0.002 * fs)
+    #ch2B_delayed =ch2[start+delay_samples:end+delay_samples]
+    ch2B_delayed = np.concatenate((
+        np.zeros(delay_samples),
+        ch1_segment[:-delay_samples]
+    ))
+
+    print(f"Created delayed version with {delay_samples} samples ({delay_samples/fs:.6f} s) delay")
+
+    # Estimate delay using GCC-PHAT
+    interp_ = 16
+
+    tau, cc, max_shift = gcc_phat(ch1_segment, ch2B_delayed, fs=fs, interp=interp_)
+    print(f"Estimated delay: {tau:.6f} s = {tau*fs:.1f} samples")
+    lags = np.linspace(-max_shift, max_shift, num=len(cc)) / (interp_ * fs)
+
+    # --- Plot FULL correlation ---
+    plt.figure(figsize=(9,4))
+    plt.plot(lags*1000, np.abs(cc))
+    plt.title("GCC-PHAT Cross-Correlation (Full Range)")
+    plt.xlabel("Lag (ms)")
+    plt.ylabel("|Cross-correlation|")
+    plt.grid(True)
+
+    # --- Zoom around estimated peak ±5 ms ---
+    zoom_window = 0.005  # seconds (±5 ms)
+    plt.figure(figsize=(8,4))
+    plt.plot(lags*1000, np.abs(cc))
+    plt.xlim([(tau - zoom_window)*1000, (tau + zoom_window)*1000])
+    plt.title(f"GCC-PHAT Zoomed Around Peak ({zoom_window*1000*2:.0f} ms window)")
+    plt.xlabel("Lag (ms)")
+    plt.ylabel("|Cross-correlation|")
+    plt.grid(True)
+    plt.show()
