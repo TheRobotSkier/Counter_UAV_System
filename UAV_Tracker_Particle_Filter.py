@@ -4,23 +4,23 @@ from mpl_toolkits.mplot3d import Axes3D
 import time
 # input will be on the form of:
 # From point pillars:
-# 1 Position of UAV bounding box (x,y,z) in world coordinates (ask about format) 
+# 1 Position of UAV bounding box (x,y,z) in world coordinates
 # 2 Orientation of UAV bounding box in world coordinates (ask about format)
 # 3 Dimentions of the bounding box (length, width, height)
 # 4 Confidence score
 # 5 timestamp
 
 # Aquistic DOA vector:
-# 6 azimuth angle 
-# 7 elevation angle 
+# 6 azimuth angle X
+# 7 elevation angle X 
 # 8 confidence score 
 # 9 timestamp
-# maybe multiple ones of these per frame
-# no previos weight to account for inacurasy
+# maybe multiple ones of these per frame 
+# no previos weight to account for inacurasy 
 
 #additionsal information:
 # timestamp
-# camera frame position and orientation in world coordinates
+# camera frame position and orientation in world coordinates 
 
 # Output will be used to controll the pan tilt system to point at the UAV:
 # 1 Position of UAV bounding box (x,y,z) in world coordinates (ask about format) 
@@ -253,7 +253,10 @@ def main():
     particle_filter = UAVParticleFilter(num_particles=2000)
     
     # Simulated true UAV trajectory
-    true_position = np.array([10, 10, 15])
+    #true_position = np.array([10, 10, 15])
+    #random start position within 70 meters of origin
+    true_position = np.random.uniform(0, 70, 3)
+    
     true_velocity = np.array([2, 1, 0.5])
     
     # Setup visualization
@@ -261,6 +264,7 @@ def main():
     
     # Add key press event handler
     keep_running = True
+    
     def on_key_press(event):
         nonlocal keep_running
         if event.key in ['q', 'escape']:
@@ -277,7 +281,7 @@ def main():
         plt.cla()
         frame += 1
         
-        # Update true position using dynamic model
+        # Update true position using dynamic model (only if not manually updated this frame)
         true_position, true_velocity = particle_filter.dynamic_model.update_state(
             true_position, true_velocity
         )
@@ -295,10 +299,10 @@ def main():
         estimated_trajectory = np.array(estimated_positions)
         
         # Update plot
-        ax.set_xlim([-50, 50])
-        ax.set_ylim([-50, 50])
-        ax.set_zlim([0, 50])
-        ax.set_title(f'UAV Tracking - Frame {frame} (Press Q to quit)')
+        ax.set_xlim([-70, 70])
+        ax.set_ylim([-70, 70])
+        ax.set_zlim([0, 70])
+        ax.set_title(f'UAV Tracking - Frame {frame} (Q: Quit)')
         
         # Plot particles
         if particle_filter.particles is not None:
@@ -317,6 +321,10 @@ def main():
         # Plot current positions
         ax.scatter(*true_position, color='green', s=100, marker='o', label='True Position')
         ax.scatter(*estimated_position, color='blue', s=100, marker='s', label='Estimated Position')
+        
+        # Add velocity vectors
+        ax.quiver(*true_position, *true_velocity, color='green', length=5, normalize=True, label='True Velocity')
+        ax.quiver(*estimated_position, *estimated_velocity, color='blue', length=5, normalize=True, label='Estimated Velocity')
         
         ax.legend()
         plt.pause(0.1)
