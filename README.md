@@ -14,6 +14,6 @@ The system uses a tetrahedral 4-microphone array for acoustic UAV detection and 
 
 ## 🛠️ Installation
 ```bash
-git clone https://github.com/your-username/Counter_UAV_System.git
+git clone https://github.com/TheRobotSkier/Counter_UAV_System.git
 cd Counter_UAV_System
 # Add setup instructions here
