@@ -110,7 +110,7 @@ class UAVParticleFilter:
         self.system_orientation = system_orientation
         self.num_particles = num_particles
         self.dynamic_model = UAVDynamicModel()
-        
+        #tissemand
         # Particle state: each particle has position and velocity
         self.particles = None
         self.velocities = None
