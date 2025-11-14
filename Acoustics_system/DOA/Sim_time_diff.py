@@ -20,7 +20,28 @@ mics = [MIC_1, MIC_2, MIC_3, MIC_4]
 # Input: sound source position
 # -----------------------------
 # Example position (you can change this)
-source_pos = np.array([2.0, 1.0, 1.5])  # meters
+source_pos = np.array([20.0, 30.0, 10.5])#np.array([2.0, 1.0, 1.5])  # meters
+
+# -----------------------------
+# Compute angles (azimuth, elevation) from origin to source
+# -----------------------------
+x, y, z = source_pos
+r = np.linalg.norm(source_pos)
+horizontal_dist = np.hypot(x, y)  # sqrt(x^2 + y^2)
+
+# Azimuth: angle in x-y plane from +X toward +Y
+azimuth_rad = np.arctan2(y, x)
+azimuth_deg = np.degrees(azimuth_rad) % 360
+
+# Elevation: angle above the x-y plane
+elevation_rad = np.arctan2(z, horizontal_dist)
+elevation_deg = np.degrees(elevation_rad)
+
+print("Source spherical coordinates:")
+print(f"  Range: {r:.4f} m")
+print(f"  Azimuth: {azimuth_rad:.6f} rad ({azimuth_deg:.2f}°)")
+print(f"  Elevation: {elevation_rad:.6f} rad ({elevation_deg:.2f}°)")
+
 
 # -----------------------------
 # Compute distances and time delays
