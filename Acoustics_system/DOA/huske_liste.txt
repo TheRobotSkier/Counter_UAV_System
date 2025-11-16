@@ -1,12 +1,23 @@
 0. Parameters:
     - D_M (Distance between Mics)
-    - SPEED_OF_SOUND
+    
     - MIC_1, MIC_2, MIC_3, MIC_4 (Microphone coordinates)
     - az_deg_step
     - el_deg_step
+    - azimuths
+    - elevations
+
+    - interp
 
 1. Input:
     - source_pos=np.array([x, y, z]) or =az_el_dist_to_xyz(az,el,dist) Polar_to_Cartesian(az,el,dist)
     - 4 chanel sound sorce
+    - SPEED_OF_SOUND
 
-2. 
+2. Sim_time_diff
+
+3. make SRP_MAP
+
+4. make grid sheach and determin DOA
+
+5. display resaults
