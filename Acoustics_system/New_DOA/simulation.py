@@ -26,6 +26,47 @@ def regular_tetrahedron_array(d_m: float) -> np.ndarray:
     mic_positions = np.array([mic_1, mic_2, mic_3, mic_4])
     return mic_positions
 
+def sph2cart(sph_cord: np.ndarray) -> np.ndarray:
+    """
+    Input
+    ----------
+    Spherical_coordinate:
+        np.array([distance, azimuth_deg, elevation_deg])
+
+    
+    Return
+    -------
+    Spherical_coordinate:
+        np.array([distance, azimuth_deg, elevation_deg])
+    """
+    distance, azimuth_deg, elevation_deg=sph_cord
+    az_rad = np.radians(azimuth_deg)
+    el_rad = np.radians(elevation_deg)
+    x = distance * np.cos(el_rad) * np.cos(az_rad)
+    y = distance * np.cos(el_rad) * np.sin(az_rad)
+    z = distance * np.sin(el_rad)
+    return np.array([x, y, z])
+
+def cart2sph(caert_cord):
+    """
+    Input
+    ----------
+    Cartesian_coordinate: 
+        np.array([x, y, z])
+     
+    Return
+    -------
+    Spherical_coordinate:
+        np.array([distance, azimuth_deg, elevation_deg])
+    """
+    x, y, z = caert_cord
+    dist = np.sqrt(x**2 + y**2 + z**2) # distance from origin in meters   
+    az_deg = np.degrees(np.arctan2(y, x)) % 360  # azimuth in degrees
+    
+    el_deg = np.degrees(np.arctan2(z, np.hypot(x, y))) # elevation in degrees, note: np.hypot(x, y)=sqrt(x^2 + y^2)
+    return np.array([dist, az_deg, el_deg])
+
+
 def compute_travel_times(source_pos: np.ndarray,
                          mic_positions: np.ndarray,
                          c: float):
@@ -86,6 +127,31 @@ def load_soundfile(filename: str):
         raise ValueError("Expected a 4-channel WAV file: shape [T, 4].")
 
     return data, fs
+
+# make all channels the same channel, input: data and channel index
+def make_all_channels_same(data: np.ndarray, channel_idx: int) -> np.ndarray:
+    """
+    Make all channels the same as the specified channel index.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Multi-channel audio [T, 4]
+    channel_idx : int
+        Index of the channel to copy to all channels
+
+    Returns
+    -------
+    np.ndarray
+        Multi-channel audio with all channels the same
+    """
+    if data.ndim != 2 or data.shape[1] != 4:
+        raise ValueError("Expected data of shape [T, 4].")
+    if not (0 <= channel_idx < 4):
+        raise ValueError("channel_idx must be in range [0, 3].")
+
+    new_data = np.repeat(data[:, channel_idx][:, None], 4, axis=1)
+    return new_data
 
 
 # Helper: Fractional delay using frequency-domain phase rotation

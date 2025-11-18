@@ -16,8 +16,6 @@ import numpy as np
 from numpy.fft import rfft, irfft
 import matplotlib.pyplot as plt
 
-
-
 def build_direction_grid(
     azimuths: np.ndarray,
     elevations: np.ndarray

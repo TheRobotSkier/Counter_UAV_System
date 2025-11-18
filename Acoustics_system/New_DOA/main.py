@@ -4,9 +4,11 @@ import time
 
 from simulation import (
     regular_tetrahedron_array,
+    cart2sph,
     compute_travel_times,
     plot_array_and_source,
     load_soundfile,
+    make_all_channels_same,
     fractional_delay_fd,
     delay_channel_soundfile
 )
@@ -19,17 +21,24 @@ from srp_doa import (
     plot_srp_map
 )
 
+from bandpass_FIR import FIRBandpass4Ch
+from bandpass_filtfilt import design_bandpass, apply_bandpass
 
 # ---------------------------
 # Parameters
 # ---------------------------
 
-D_M = 1.0  # distance between microphones (meters)
+D_M = 0.5#1.0  # distance between microphones (meters)
 SPEED_OF_SOUND = 343.0  # m/s
 
 # Frame length and overlap:
 FRAME_DUR_SEC = 0.100  # seconds
 OVERLAP_50 = True  # 50% overlap if True, else no overlap
+
+# Bandpass filter settings
+BANPASS_FILTER=False #False # keep false it do funny stuff
+LOWCUT = 100.0   # Hz
+HIGHCUT = 8000.0 # Hz
 
 # SRP grid resolution
 # Search grid
@@ -43,13 +52,14 @@ INTERP_GCC = 16
 
 # Simulation settings
 SIMULATION_MODE = True         # Toggle real/simulated audio
-SOURCE_POS = np.array([20.0, 30.0, 10.5])  # [m] source for simulation
+SOURCE_POS = np.array([20.0, 100.0, 20.5])  # [m] source for simulation
 
 
 # File mode settings
 WAV_FILENAME = "Acoustics_system/Recordings/Four_mic_recordings/Re-recording_of_Phantom_Test_File1.wav"
 SKIP_SECONDS = 1.0
-
+ALL_CHANNELS_SAME= False  # make all channels same (for testing)
+CHANNEL_INDEX = 0      # which channel to use if ALL_CHANNELS_SAME=True [0..3]
 
 
 
@@ -58,12 +68,16 @@ def main():
     # Build mic array
     mic_positions = regular_tetrahedron_array(D_M)  # [4,3]
 
+
+
     if SIMULATION_MODE:
         # Compute travel times and TDOAs
         distances, times, relative_times, pairs, pair_tdoas = compute_travel_times(
             SOURCE_POS, mic_positions, SPEED_OF_SOUND
         )
         print("Simulated source position (m):", SOURCE_POS)
+        dist_gt,az_gt,el_gt=np.round(cart2sph(SOURCE_POS), 2)
+        print(f"Sound source ground truth (spherical):azimuth={az_gt} deg, elevation={el_gt} deg, distance={dist_gt} m")
 
         print("\nRelative arrival times [ms] (0 = first detection):")
         for (i, j), dt in pair_tdoas.items():
@@ -72,8 +86,18 @@ def main():
         # Load simulated audio file
         data, fs = load_soundfile(WAV_FILENAME)
 
+        # Optionally make all channels the same (for testing)
+        if ALL_CHANNELS_SAME:
+            data = make_all_channels_same(data, CHANNEL_INDEX)
+            print(f"All channels set to channel {CHANNEL_INDEX} for testing.")
+
         # Apply delays to simulate TDOAs
         delayed_data = delay_channel_soundfile(data, fs, relative_times)
+
+        # Initialize bandpass filter
+        if BANPASS_FILTER:
+            sos = design_bandpass(LOWCUT, HIGHCUT, fs)
+            #bandpass_filter = FIRBandpass4Ch(lowcut=LOWCUT,highcut=HIGHCUT,sr=fs)
 
         # Visualize array and source
         plot_array_and_source(mic_positions, SOURCE_POS)
@@ -108,12 +132,19 @@ def main():
 
             frame = delayed_data[start:end, :]
 
+            # Apply bandpass filter
+            if BANPASS_FILTER:
+                frame_filtered = apply_bandpass(frame, sos)
+                #frame_filtered = bandpass_filter.process(frame)
+            else:
+                frame_filtered = frame
+
             # start timer
             t0 = time.perf_counter()
 
             # GCC-PHAT for all pairs (per frame)
             pair_cc, pair_lags = srp_phat_precompute(
-                frame,
+                frame_filtered,
                 fs,
                 pairs,
                 max_tdoa_sec,
