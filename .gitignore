@@ -49,3 +49,23 @@ qtcreator-*
 
 # Catkin custom files
 CATKIN_IGNORE
+
+# Stuff for pointpillars project
+pytorch_1.8.1-cuda11.1-cudnn8-devel.sif
+PointPillars/
+Datasets/KITTI/
+Datasets/Drone_Data/training/
+Datasets/Drone_Data/testing/
+.vscode/
+PointPillar_Env/
+__pycache__
+build/
+*.egg-info
+*.so
+*_logs*
+tmp/
+results/
+*.sh
+.idea
+*.err
+*.out
