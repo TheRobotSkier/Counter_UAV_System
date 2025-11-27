@@ -137,4 +137,4 @@ Located in `pan_tilt_arduino_firmware/`.
 
 - **Baud Rate:** 57600 (Must match `driver_node.py`)
 - **Protocol:** Dynamixel 2.0
-- **Safety:** The firmware clamps goal positions before moving motors to prevent self-collision, even if ROS sends a bad command.
+- **Safety:** The firmware clamps goal positions before moving motors to prevent self-collision, even if ROS sends a bad command. 
