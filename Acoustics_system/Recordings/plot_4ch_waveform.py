@@ -8,8 +8,8 @@ import soundfile as sf
 import matplotlib.pyplot as plt
 
 # ---- Path to your recording ----
-wav_path = "Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_151227_48000Hz_4ch.wav" #"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_141301_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_141112_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_140932_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_140817_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_140550_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_132236_48000Hz_4ch.wav"
-
+#wav_path = "Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_151227_48000Hz_4ch.wav" #"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_141301_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_141112_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_140932_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_140817_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_140550_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251027_132236_48000Hz_4ch.wav"
+wav_path = "Acoustics_system/Recordings/Four_mic_recordings/recording_20251127_152305_48000Hz_4ch.wav"#"Acoustics_system/Recordings/Four_mic_recordings/recording_20251127_151844_48000Hz_4ch.wav"
 # ---- Read WAV ----
 data, fs = sf.read(wav_path, always_2d=True)   # shape: (samples, channels)
 n_samples, n_channels = data.shape

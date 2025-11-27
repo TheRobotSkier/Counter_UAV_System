@@ -58,7 +58,7 @@ SOURCE_POS = np.array([20.0, 100.0, 20.5])  # [m] source for simulation
 # File mode settings
 WAV_FILENAME = "Acoustics_system/Recordings/Four_mic_recordings/Re-recording_of_Phantom_Test_File1.wav"
 SKIP_SECONDS = 1.0
-ALL_CHANNELS_SAME= False  # make all channels same (for testing)
+ALL_CHANNELS_SAME= True#False  # make all channels same (for testing)
 CHANNEL_INDEX = 0      # which channel to use if ALL_CHANNELS_SAME=True [0..3]
 
 
