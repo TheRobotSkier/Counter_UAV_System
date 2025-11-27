@@ -14,8 +14,8 @@ class UAVDynamicModel:
         self.max_horizontal_speed = 22.0
         self.max_vertical_speed = 5.0
         self.velocity_decay = 0.98
-        self.position_noise_std = 0.1
-        self.velocity_noise_std = 0.05
+        self.position_noise_std = 0.1 # changed from 0.1
+        self.velocity_noise_std = 0.05 # changed from 0.05
 
     def constrain_velocity(self, velocity):
         "Constrain velocities to physically plausible limits"

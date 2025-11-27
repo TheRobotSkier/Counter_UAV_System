@@ -17,6 +17,18 @@ class UAVDynamicModel:
         self.velocity_decay = 1
         self.position_noise_std = 0.1
 
+#    def __init__(self):
+#        self.max_speed = 5
+#        self.max_acceleration = 10.0
+#        self.max_vertical_speed = 22
+#        self.max_vertical_acceleration = 5.0
+#        self.velocity_decay = 0.98
+#        self.position_noise_std = 0.1
+#        self.position_noise_std = 0.05
+
+
+
+
     def constrain_velocity(self, velocity):
         horizontal_speed = np.linalg.norm(velocity[:2])
         vertical_speed = abs(velocity[2])
@@ -70,7 +82,7 @@ class DroneSimNode(Node):
         
         # Initialize drone state
         self.dynamic_model = UAVDynamicModel()
-        self.target_point = np.array([-30, 5, 0])
+        self.target_point = np.array([-100, 5, 0])
         self.true_position, self.true_velocity = self.initialize_drone_position(self.target_point)
         
         self.get_logger().info("Drone simulation node started")
