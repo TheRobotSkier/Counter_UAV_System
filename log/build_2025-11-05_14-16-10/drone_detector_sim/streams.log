@@ -1,0 +1,47 @@
+[0.334s] Invoking command in '/home/antonio/simulations/drone_detector_sim': PYTHONPATH=/home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/drone_detector_sim build --build-base /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build install --record /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/install.log --single-version-externally-managed install_data
+[0.481s] running egg_info
+[0.489s] creating build/drone_detector_sim/drone_detector_sim.egg-info
+[0.490s] writing build/drone_detector_sim/drone_detector_sim.egg-info/PKG-INFO
+[0.490s] writing dependency_links to build/drone_detector_sim/drone_detector_sim.egg-info/dependency_links.txt
+[0.490s] writing entry points to build/drone_detector_sim/drone_detector_sim.egg-info/entry_points.txt
+[0.490s] writing requirements to build/drone_detector_sim/drone_detector_sim.egg-info/requires.txt
+[0.490s] writing top-level names to build/drone_detector_sim/drone_detector_sim.egg-info/top_level.txt
+[0.491s] writing manifest file 'build/drone_detector_sim/drone_detector_sim.egg-info/SOURCES.txt'
+[0.509s] reading manifest file 'build/drone_detector_sim/drone_detector_sim.egg-info/SOURCES.txt'
+[0.509s] writing manifest file 'build/drone_detector_sim/drone_detector_sim.egg-info/SOURCES.txt'
+[0.509s] running build
+[0.510s] running build_py
+[0.510s] creating /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim
+[0.510s] copying drone_detector_sim/ground_truth_tf_node.py -> /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim
+[0.510s] copying drone_detector_sim/drone_controller_node.py -> /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim
+[0.510s] copying drone_detector_sim/ground_truth_bbox_node.py -> /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim
+[0.510s] copying drone_detector_sim/__init__.py -> /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim
+[0.510s] running install
+[0.513s] running install_lib
+[0.522s] creating /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim
+[0.522s] copying /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim/ground_truth_tf_node.py -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim
+[0.522s] copying /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim/drone_controller_node.py -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim
+[0.522s] copying /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim/ground_truth_bbox_node.py -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim
+[0.522s] copying /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build/lib/drone_detector_sim/__init__.py -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim
+[0.523s] byte-compiling /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim/ground_truth_tf_node.py to ground_truth_tf_node.cpython-310.pyc
+[0.523s] byte-compiling /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim/drone_controller_node.py to drone_controller_node.cpython-310.pyc
+[0.523s] byte-compiling /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim/ground_truth_bbox_node.py to ground_truth_bbox_node.cpython-310.pyc
+[0.524s] byte-compiling /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim/__init__.py to __init__.cpython-310.pyc
+[0.524s] running install_data
+[0.524s] creating /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/ament_index/resource_index/packages
+[0.524s] copying resource/drone_detector_sim -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/ament_index/resource_index/packages
+[0.524s] copying package.xml -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim
+[0.524s] creating /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim/launch
+[0.524s] copying launch/detect_sim.launch.py -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim/launch
+[0.524s] creating /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim/worlds
+[0.524s] copying worlds/detector_world.sdf -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim/worlds
+[0.524s] creating /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim/rviz
+[0.525s] copying rviz/config.rviz -> /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/share/drone_detector_sim/rviz
+[0.525s] running install_egg_info
+[0.534s] Copying build/drone_detector_sim/drone_detector_sim.egg-info to /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages/drone_detector_sim-0.0.0-py3.10.egg-info
+[0.534s] running install_scripts
+[0.552s] Installing drone_controller_node script to /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/drone_detector_sim
+[0.552s] Installing ground_truth_bbox_node script to /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/drone_detector_sim
+[0.552s] Installing ground_truth_tf_node script to /home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/drone_detector_sim
+[0.552s] writing list of installed files to '/home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/install.log'
+[0.565s] Invoked command in '/home/antonio/simulations/drone_detector_sim' returned '0': PYTHONPATH=/home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/antonio/simulations/drone_detector_sim/install/drone_detector_sim/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/drone_detector_sim build --build-base /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/build install --record /home/antonio/simulations/drone_detector_sim/build/drone_detector_sim/install.log --single-version-externally-managed install_data

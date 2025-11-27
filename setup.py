@@ -2,7 +2,7 @@ from setuptools import setup
 import os
 from glob import glob
 
-package_name = 'pan_tilt_control'
+package_name = 'drone_detector_sim'
 
 setup(
     name=package_name,
@@ -12,27 +12,30 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        # --- THIS IS THE CRITICAL SECTION YOU ARE MISSING ---
+        # Include all files from the 'launch' folder
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'urdf'), glob('urdf/*')),
-        (os.path.join('share', package_name, 'config'), glob('config/*')),
-        # ----------------------------------------------------
+        # Include all files from the 'worlds' folder
+        (os.path.join('share', package_name, 'worlds'), glob('worlds/*.sdf')),
+        # Include all files from the 'rviz' folder
+        (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ],
-    install_requires=['setuptools', 'pyserial'],
+    install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='antonio', # Changed to you
-    maintainer_email='antonio@example.com', # Changed to you
-    description='ROS 2 driver for DYNAMIXEL pan-tilt system via Arduino.',
-    license='Apache 2.0',
+    maintainer='Antonio Luis Gonzalez Hernandez',
+    maintainer_email='antonioluissgh@gmail.com',
+    description='Simulation for detecting a drone with a lidar.',
+    license='Apache-2.0',
+    
+    # --- FIX ---
+    # 'tests_require' is deprecated. Use 'extras_require' instead.
     extras_require={
-        'test': [
-            'pytest',
-        ],
+        'test': ['pytest']
     },
+    # --- END FIX ---
+    
     entry_points={
         'console_scripts': [
-            # This makes your driver_node.py an executable
-            'driver_node = pan_tilt_control.driver_node:main',
+            'ground_truth_bbox_node = drone_detector_sim.ground_truth_bbox_node:main',
         ],
     },
 )
