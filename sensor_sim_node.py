@@ -26,8 +26,8 @@ class SensorSimNode(Node):
         self.system_position = np.array([0, 0, 0])
         
         # Noise parameters
-        self.doa_noise_level = 2.0  # degrees
-        self.pp_noise_std = 0.5
+        self.doa_noise_level = 5.0  # changed from 2 degrees
+        self.pp_noise_std = 1 # changed from 0.5 meters
         
         self.get_logger().info("Sensor simulation node started")
 
