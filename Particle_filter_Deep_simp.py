@@ -9,15 +9,16 @@ from geometry_msgs.msg import Point, Vector3
 from uav_interfaces.msg import DroneState, DOAData, PointPillarsData, ParticleFilterState
 
 class UAVDynamicModel:
-    """Clean dynamic model for UAV - only used for particle prediction"""
+    "Dynamic model for UAV - only used for particle prediction"
     def __init__(self):
         self.max_horizontal_speed = 22.0
         self.max_vertical_speed = 5.0
         self.velocity_decay = 0.98
         self.position_noise_std = 0.1
-        self.angle_noise_std = 0.05  # rad
+        self.velocity_noise_std = 0.05
 
     def constrain_velocity(self, velocity):
+        "Constrain velocities to physically plausible limits"
         horizontal_speed = np.linalg.norm(velocity[:2])
         if horizontal_speed > self.max_horizontal_speed:
             scale = self.max_horizontal_speed / horizontal_speed
@@ -29,47 +30,34 @@ class UAVDynamicModel:
         return velocity
 
 class ParticleFilter:
-    """Unified particle filter with full state (XYZ + 2 angles from origin)"""
-    def __init__(self, system_position, num_particles=500):
+    "particle filter (XYZ position)"
+    def __init__(self, system_position, num_particles=1000):
         self.system_position = system_position
         self.num_particles = num_particles
         self.dynamic_model = UAVDynamicModel()
         
-        # Particles: each has [x, y, z, azimuth, elevation] 
-        self.particles = None  # shape: (num_particles, 5)
-        self.velocities = None  # shape: (num_particles, 3) - only for XYZ
+        # Minimal state: each particle has [x, y, z] position only
+        self.particles = None  # shape: (num_particles, 3)
+        self.velocities = None  # shape: (num_particles, 3)
         self.weights = None
         
-    def initialize_particles(self, initial_range=(10, 50)):
-        """Initialize particles with random positions and angles"""
+    def initialize_particles(self, initial_range=(-70, 70)):
+        "Initialize particles with random positions around system"
         # Position particles randomly in 3D space around system
-        positions = np.random.uniform(-initial_range[1], initial_range[1], (self.num_particles, 3))
-        positions[:, 2] = np.abs(positions[:, 2])  # Keep z positive
+        self.particles = np.random.uniform(-initial_range[1], initial_range[1], 
+                                         (self.num_particles, 3))
+        self.particles[:, 2] = np.abs(self.particles[:, 2])  # Keep z positive
         
-        # Initialize with random angles (azimuth, elevation)
-        angles = np.random.uniform(-np.pi, np.pi, (self.num_particles, 2))
-        angles[:, 1] = np.clip(angles[:, 1], -np.pi/2, np.pi/2)  # Elevation between -90° and 90°
-        
-        # Combine positions and angles
-        self.particles = np.hstack([positions, angles])
-        
-        # Initialize velocities (only for XYZ)
+        # Initialize velocities
         self.velocities = np.random.uniform(-1, 1, (self.num_particles, 3))
         for i in range(self.num_particles):
             self.velocities[i] = self.dynamic_model.constrain_velocity(self.velocities[i])
             
+        # Initialize uniform weights
         self.weights = np.ones(self.num_particles) / self.num_particles
         
-    def particle_to_cartesian(self, particle):
-        """Convert particle state to Cartesian coordinates"""
-        return particle[:3]
-    
-    def particle_to_angles(self, particle):
-        """Get azimuth and elevation from particle"""
-        return particle[3], particle[4]
-    
     def cartesian_to_angles(self, position):
-        """Convert Cartesian position to angles relative to system origin"""
+        "Convert Cartesian position to angles relative to system origin"
         relative_pos = position - self.system_position
         distance = np.linalg.norm(relative_pos)
         
@@ -83,46 +71,43 @@ class ParticleFilter:
         return azimuth, elevation
         
     def predict(self, dt=0.1):
-        """Predict particle movement - update both position and angles"""
+        "Predict particle movement using kinematic model"
         if self.particles is None:
-            return
+            self.initialize_particles()
             
         # Add process noise to velocities
-        velocity_noise = np.random.normal(0, 0.05, (self.num_particles, 3))
+        velocity_noise = np.random.normal(0, self.dynamic_model.velocity_noise_std, 
+                                        (self.num_particles, 3))
         self.velocities += velocity_noise
         
-        # Constrain velocities
+        # Apply velocity constraints and decay
         for i in range(self.num_particles):
             self.velocities[i] = self.dynamic_model.constrain_velocity(self.velocities[i])
+            self.velocities[i] *= self.dynamic_model.velocity_decay
         
-        # Update positions (XYZ)
-        self.particles[:, :3] += self.velocities * dt
+        # Update positions
+        self.particles += self.velocities * dt
         
         # Add position noise
-        position_noise = np.random.normal(0, self.dynamic_model.position_noise_std, (self.num_particles, 3))
-        self.particles[:, :3] += position_noise
+        position_noise = np.random.normal(0, self.dynamic_model.position_noise_std, 
+                                        (self.num_particles, 3))
+        self.particles += position_noise
         
-        # Update angles based on new positions (angles are derived from position relative to system)
-        for i in range(self.num_particles):
-            azimuth, elevation = self.cartesian_to_angles(self.particles[i, :3])
-            # Add small angle noise
-            angle_noise = np.random.normal(0, self.dynamic_model.angle_noise_std, 2)
-            self.particles[i, 3] = azimuth + angle_noise[0]
-            self.particles[i, 4] = elevation + angle_noise[1]
-            # Keep elevation in valid range
-            self.particles[i, 4] = np.clip(self.particles[i, 4], -np.pi/2, np.pi/2)
+        # Ensure particles stay above ground
+        self.particles[:, 2] = np.maximum(self.particles[:, 2], 0.1)
             
     def update_with_doa(self, doa_data, doa_std_rad=0.1):
-        """Update weights based on DOA measurement (azimuth, elevation)"""
+        "Update weights based on DOA measurement - compute angles on-demand"
         doa_azimuth = np.deg2rad(doa_data[0])
         doa_elevation = np.deg2rad(doa_data[1])
         
         for i in range(self.num_particles):
-            particle_azimuth, particle_elevation = self.particle_to_angles(self.particles[i])
+            # Convert particle position to predicted angles
+            pred_azimuth, pred_elevation = self.cartesian_to_angles(self.particles[i])
             
             # Calculate angular errors
-            azimuth_error = self.angle_difference(particle_azimuth, doa_azimuth)
-            elevation_error = self.angle_difference(particle_elevation, doa_elevation)
+            azimuth_error = self.angle_difference(pred_azimuth, doa_azimuth)
+            elevation_error = self.angle_difference(pred_elevation, doa_elevation)
             
             # Combined angular likelihood
             azimuth_likelihood = np.exp(-0.5 * (azimuth_error / doa_std_rad) ** 2)
@@ -134,38 +119,38 @@ class ParticleFilter:
             self.weights[i] *= angular_likelihood
         
         # Normalize weights
-        if np.sum(self.weights) > 0:
-            self.weights /= np.sum(self.weights)
-        else:
-            self.weights = np.ones(self.num_particles) / self.num_particles
+        self.normalize_weights()
 
-    def update_with_pp(self, pp_position, position_std=2.0):
-        """Update weights based on PointPillars position measurement"""
+    def update_with_pp(self, pp_position, position_std=0.5):
+        "Update weights based on PointPillars position measurement"
         for i in range(self.num_particles):
-            particle_position = self.particle_to_cartesian(self.particles[i])
-            
-            # Calculate position error
-            position_error = np.linalg.norm(particle_position - pp_position)
+            # Calculate position error directly
+            position_error = np.linalg.norm(self.particles[i] - pp_position)
             position_likelihood = np.exp(-0.5 * (position_error / position_std) ** 2)
             
             # Update weight
             self.weights[i] *= position_likelihood
         
         # Normalize weights
+        self.normalize_weights()
+
+    def normalize_weights(self):
+        "Normalize weights with robustness check"
         if np.sum(self.weights) > 0:
             self.weights /= np.sum(self.weights)
         else:
+            # Reset if all weights become zero (numerical issues)
             self.weights = np.ones(self.num_particles) / self.num_particles
 
     def angle_difference(self, angle1, angle2):
-        """Calculate smallest difference between two angles"""
+        "Calculate smallest difference between two angles"
         diff = angle1 - angle2
         return np.arctan2(np.sin(diff), np.cos(diff))
 
     def resample(self):
-        """Systematic resampling"""
+        "Systematic resampling to concentrate on high-probability particles"
         cumulative_sum = np.cumsum(self.weights)
-        cumulative_sum[-1] = 1.0
+        cumulative_sum[-1] = 1.0  # Ensure numerical stability
         
         positions = (np.arange(self.num_particles) + np.random.random()) / self.num_particles
         indices = np.zeros(self.num_particles, dtype=int)
@@ -178,12 +163,19 @@ class ParticleFilter:
             else:
                 j += 1
                 
+        # Resample particles and velocities
         self.particles = self.particles[indices]
         self.velocities = self.velocities[indices]
+        
+        # Add small noise to resampled particles to maintain diversity
+        resample_noise = np.random.normal(0, 0.01, self.particles.shape)
+        self.particles += resample_noise
+        
+        # Reset weights to uniform
         self.weights = np.ones(self.num_particles) / self.num_particles
         
-    def process_measurement(self, sensor_type, sensor_data, dt=0.1):
-        """Main processing function for any sensor type"""
+    def process_measurement(self, sensor_type, sensor_data, dt=0.2):
+        "Main processing function for any sensor type"
         if self.particles is None:
             self.initialize_particles()
         
@@ -200,24 +192,31 @@ class ParticleFilter:
         self.resample()
     
     def estimate_state(self):
-        """Get position and velocity estimates from most likely particle"""
+        "Get position and velocity estimates from most likely particle"
         if self.particles is not None and self.weights is not None:
+            # Use the most likely particle to avoid averaging between modes
+            #It is important to avoid averaging between multiple partivles in different locations since this could deal to firing at the center of mass which is not an actual likely position
             most_likely_idx = np.argmax(self.weights)
-            position = self.particle_to_cartesian(self.particles[most_likely_idx])
-            velocity = self.velocities[most_likely_idx]
-            azimuth, elevation = self.particle_to_angles(self.particles[most_likely_idx])
+            position = self.particles[most_likely_idx].copy()
+            velocity = self.velocities[most_likely_idx].copy()
+            
+            # Convert best particle to angles for output
+            azimuth, elevation = self.cartesian_to_angles(position)
+            
             return position, velocity, azimuth, elevation
+        
+        # Fallback if not initialized
         return np.array([0, 0, 0]), np.array([0, 0, 0]), 0.0, 0.0
-
+    
 class ParticleFilterNode(Node):
-    """Clean ROS node with unified particle filter"""
+    "ROS node with minimal state particle filter"
     def __init__(self):
         super().__init__('particle_filter_node')
         
         # System position (sensor location)
         self.system_position = np.array([0, 0, 0])
         
-        # Initialize unified particle filter
+        # Initialize particle filter
         self.pf = ParticleFilter(self.system_position, num_particles=500)
         
         # Data storage for visualization
@@ -262,10 +261,10 @@ class ParticleFilterNode(Node):
         # Main processing timer
         self.timer = self.create_timer(0.1, self.process_measurements)
         
-        self.get_logger().info("Unified particle filter node started")
+        self.get_logger().info("Minimal state particle filter node started")
 
     def setup_plot(self):
-        """Initialize 3D plot for visualization"""
+        "Initialize 3D plot for visualization"
         plt.ion()
         self.fig = plt.figure(figsize=(12, 8))
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -275,27 +274,27 @@ class ParticleFilterNode(Node):
         self.ax.set_xlabel('X (m)')
         self.ax.set_ylabel('Y (m)')
         self.ax.set_zlabel('Z (m)')
-        self.ax.set_title('Unified Particle Filter - Full State Estimation')
+        self.ax.set_title('Particle Filter - 3D Tracking')
 
     def doa_callback(self, msg):
-        """Store latest DOA data"""
+        "Store latest DOA data"
         self.latest_doa_data = np.array([msg.azimuth, msg.elevation])
         self.get_logger().debug(f"Received DOA: az={msg.azimuth:.1f}°, el={msg.elevation:.1f}°")
 
     def pp_callback(self, msg):
-        """Store latest PointPillars data"""
+        "Store latest PointPillars data"
         self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
         self.get_logger().debug(f"Received PP: ({self.latest_pp_data[0]:.1f}, {self.latest_pp_data[1]:.1f}, {self.latest_pp_data[2]:.1f})")
 
     def true_state_callback(self, msg):
-        """Store latest true state for visualization only"""
+        "Store latest true state for visualization only"
         self.latest_true_state = {
             'position': np.array([msg.true_position.x, msg.true_position.y, msg.true_position.z])
         }
         self.true_positions.append(self.latest_true_state['position'].copy())
 
     def process_measurements(self):
-        """Main processing - filter incoming sensor data"""
+        "Main processing - filter incoming sensor data"
         has_new_data = False
         
         # Process DOA data
@@ -325,14 +324,14 @@ class ParticleFilterNode(Node):
             est_position, est_velocity, est_azimuth, est_elevation = self.pf.estimate_state()
             self.estimated_positions.append(est_position.copy())
             
-            # Publish filter result (only position and velocity - no azimuth/elevation in message)
+            # Publish filter result
             self.publish_filter_state(est_position, est_velocity)
             
             # Update visualization
             self.update_plot()
 
     def publish_filter_state(self, position, velocity):
-        """Publish filtered state - only position and velocity"""
+        "Publish filtered state"
         filter_msg = ParticleFilterState()
         filter_msg.header.stamp = self.get_clock().now().to_msg()
         filter_msg.header.frame_id = "world"
@@ -350,13 +349,13 @@ class ParticleFilterNode(Node):
         self.filter_state_pub.publish(filter_msg)
 
     def update_plot(self):
-        """Update visualization with current data"""
+        "Update visualization with current data"
         self.ax.clear()
         
         self.ax.set_xlim([-50, 50])
         self.ax.set_ylim([-50, 50])
         self.ax.set_zlim([0, 50])
-        self.ax.set_title('Unified Particle Filter - Full State Estimation')
+        self.ax.set_title('Particle Filter - 3D Tracking')
         
         # Plot system origin
         self.ax.scatter(*self.system_position, c='black', s=100, marker='*', label='System Origin')
@@ -373,10 +372,9 @@ class ParticleFilterNode(Node):
             self.ax.plot(est_traj[:, 0], est_traj[:, 1], est_traj[:, 2], 
                         'b-', linewidth=2, label='Estimated Trajectory')
         
-        # Plot particles (XYZ positions only)
+        # Plot particles
         if self.pf.particles is not None:
-            positions = self.pf.particles[:, :3]
-            self.ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2], 
+            self.ax.scatter(self.pf.particles[:, 0], self.pf.particles[:, 1], self.pf.particles[:, 2], 
                           c='red', alpha=0.3, s=10, label='Particles')
         
         # Plot current estimate
