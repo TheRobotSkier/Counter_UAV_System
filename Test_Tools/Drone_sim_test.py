@@ -6,28 +6,17 @@ import numpy as np
 from geometry_msgs.msg import Point, Vector3
 from std_msgs.msg import Header
 from uav_interfaces.msg import DroneState
+import time
 
 class UAVDynamicModel:
     """Simple dynamic model for DJI Mavic-like UAV"""
     def __init__(self):
-        self.max_speed = 500.0 # cm/s
-        self.max_acceleration = 100.0 
+        self.max_speed = 500.0
+        self.max_acceleration = 100.0
         self.max_vertical_speed = 200.0
         self.max_vertical_acceleration = 50.0
         self.velocity_decay = 1
         self.position_noise_std = 0.1
-
-#    def __init__(self):
-#        self.max_speed = 5
-#        self.max_acceleration = 10.0
-#        self.max_vertical_speed = 22
-#        self.max_vertical_acceleration = 5.0
-#        self.velocity_decay = 0.98
-#        self.position_noise_std = 0.1
-#        self.position_noise_std = 0.05
-
-
-
 
     def constrain_velocity(self, velocity):
         horizontal_speed = np.linalg.norm(velocity[:2])
@@ -80,41 +69,79 @@ class DroneSimNode(Node):
         # Timer for simulation updates
         self.timer = self.create_timer(0.1, self.update_simulation)  # 10 Hz
         
-        # Initialize drone state
+        # Drone state variables
         self.dynamic_model = UAVDynamicModel()
-        self.target_point = np.array([-100, 5, 0])
-        self.true_position, self.true_velocity = self.initialize_drone_position(self.target_point)
+        self.origin = np.array([0, 0, 0])
+        self.despawn_distance = 0.5  # meters
+        self.respawn_delay = 5.0  # seconds
+        self.spawn_distance = 100.0  # meters
         
-        self.get_logger().info("Drone simulation node started")
+        # Initialize drone state
+        self.true_position, self.true_velocity = self.spawn_drone()
+        self.drone_active = True
+        self.despawn_time = None
 
-    def initialize_drone_position(self, target_point, initial_distance_range=(30, 70)):
-        """Initialize drone position and velocity towards target point"""
-        true_position = np.random.uniform(initial_distance_range[0], initial_distance_range[1], 3)
-        direction_to_target = target_point - true_position
-        direction_to_target = direction_to_target / np.linalg.norm(direction_to_target)
-        true_velocity = direction_to_target * 5  # Scale to desired speed
+    def spawn_drone(self):
+        """Spawn drone at random location 100m from origin"""
+        # Generate random direction vector
+        direction = np.random.uniform(-1, 1, 3)
+        direction = direction / np.linalg.norm(direction)  # Normalize
         
-        return true_position, true_velocity
+        # Position at 100m distance
+        spawn_position = direction * self.spawn_distance
+        
+        # Velocity towards origin
+        velocity_direction = -direction  # Towards origin
+        initial_speed = np.random.uniform(3, 8)  # Random speed between 3-8 m/s
+        spawn_velocity = velocity_direction * initial_speed
+        
+        return spawn_position, spawn_velocity
 
-    def update_drone_dynamics(self, true_position, true_velocity, target_point, dt=0.1):
-        """Update drone position and maintain direction towards target"""
+    def update_drone_dynamics(self, true_position, true_velocity, dt=0.1):
+        """Update drone position and maintain direction towards origin"""
         true_position, true_velocity = self.dynamic_model.update_state(true_position, true_velocity, dt)
         
-        # Maintain consistent direction toward target
-        direction_to_target = target_point - true_position
-        direction_to_target = direction_to_target / np.linalg.norm(direction_to_target)
-        true_velocity = direction_to_target * np.linalg.norm(true_velocity)
+        # Maintain consistent direction toward origin
+        direction_to_origin = self.origin - true_position
+        direction_to_origin = direction_to_origin / np.linalg.norm(direction_to_origin)
+        true_velocity = direction_to_origin * np.linalg.norm(true_velocity)
         
         return true_position, true_velocity
 
+    def check_despawn_condition(self, position):
+        """Check if drone has reached origin (within despawn distance)"""
+        distance_to_origin = np.linalg.norm(position)
+        return distance_to_origin <= self.despawn_distance
+
     def update_simulation(self):
-        """Update drone state and publish"""
-        # Update dynamics
-        self.true_position, self.true_velocity = self.update_drone_dynamics(
-            self.true_position, self.true_velocity, self.target_point
-        )
+        """Update drone state and handle spawn/despawn logic"""
+        current_time = time.time()
         
-        # Create and publish message
+        if self.drone_active:
+            # Update drone dynamics
+            self.true_position, self.true_velocity = self.update_drone_dynamics(
+                self.true_position, self.true_velocity
+            )
+            
+            # Check if drone should despawn
+            if self.check_despawn_condition(self.true_position):
+                self.drone_active = False
+                self.despawn_time = current_time
+                return
+            
+            # Publish active drone state
+            self.publish_drone_state()
+            
+        else:
+            # Drone is despawning, check if respawn time has elapsed
+            if current_time - self.despawn_time >= self.respawn_delay:
+                self.true_position, self.true_velocity = self.spawn_drone()
+                self.drone_active = True
+                self.despawn_time = None
+                self.publish_drone_state()
+
+    def publish_drone_state(self):
+        """Publish current drone state"""
         msg = DroneState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "world"
@@ -128,8 +155,6 @@ class DroneSimNode(Node):
         msg.true_velocity.z = float(self.true_velocity[2])
         
         self.drone_state_pub.publish(msg)
-        
-        self.get_logger().debug(f"Published drone state: {self.true_position}")
 
 def main():
     rclpy.init()

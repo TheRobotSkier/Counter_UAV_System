@@ -29,14 +29,6 @@ class UAVDynamicModel:
             velocity[2] = np.sign(velocity[2]) * self.max_vertical_speed
         return velocity
 
-
-
-
-
-
-
-
-
 class ParticleFilter:
     "particle filter (XYZ position)"
     def __init__(self, system_position, num_particles=1000):
@@ -211,16 +203,6 @@ class ParticleFilter:
             
             return position, velocity, azimuth, elevation
         return np.array([0, 0, 0]), np.array([0, 0, 0]), 0.0, 0.0
-    
-
-
-
-
-
-
-
-
-
 
 class ParticleFilterNode(Node):
     "ROS node with minimal state particle filter"
@@ -243,6 +225,9 @@ class ParticleFilterNode(Node):
         self.latest_doa_data = None
         self.latest_pp_data = None
         self.latest_true_state = None
+        
+        # Track if we have received any true state
+        self.has_received_true_state = False
         
         # Subscribers
         self.doa_sub = self.create_subscription(
@@ -272,7 +257,7 @@ class ParticleFilterNode(Node):
         # Visualization setup
         self.setup_plot()
         
-        # Main processing timer
+        # Main processing timer - runs continuously regardless of sensor data
         self.timer = self.create_timer(0.1, self.process_measurements)
         
         self.get_logger().info("Minimal state particle filter node started")
@@ -293,12 +278,10 @@ class ParticleFilterNode(Node):
     def doa_callback(self, msg):
         "Store latest DOA data"
         self.latest_doa_data = np.array([msg.azimuth, msg.elevation])
-        self.get_logger().debug(f"Received DOA: az={msg.azimuth:.1f}°, el={msg.elevation:.1f}°")
 
     def pp_callback(self, msg):
         "Store latest PointPillars data"
         self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
-        self.get_logger().debug(f"Received PP: ({self.latest_pp_data[0]:.1f}, {self.latest_pp_data[1]:.1f}, {self.latest_pp_data[2]:.1f})")
 
     def true_state_callback(self, msg):
         "Store latest true state for visualization only"
@@ -306,12 +289,13 @@ class ParticleFilterNode(Node):
             'position': np.array([msg.true_position.x, msg.true_position.y, msg.true_position.z])
         }
         self.true_positions.append(self.latest_true_state['position'].copy())
+        self.has_received_true_state = True
 
     def process_measurements(self):
-        "Main processing - filter incoming sensor data"
-        has_new_data = False
+        "Main processing - filter runs continuously with or without new sensor data"
+        has_new_sensor_data = False
         
-        # Process DOA data
+        # Process DOA data if available
         if self.latest_doa_data is not None:
             self.pf.process_measurement('doa', self.latest_doa_data)
             
@@ -323,26 +307,25 @@ class ParticleFilterNode(Node):
             z = 30 * np.sin(elevation_rad)
             self.doa_measurements.append(np.array([x, y, z]))
             
-            has_new_data = True
+            has_new_sensor_data = True
             self.latest_doa_data = None  # Clear after processing
             
-        # Process PointPillars data
+        # Process PointPillars data if available
         if self.latest_pp_data is not None:
             self.pf.process_measurement('pp', self.latest_pp_data)
             self.pp_measurements.append(self.latest_pp_data.copy())
-            has_new_data = True
+            has_new_sensor_data = True
             self.latest_pp_data = None  # Clear after processing
         
-        if has_new_data:
-            # Get estimate
-            est_position, est_velocity, est_azimuth, est_elevation = self.pf.estimate_state()
-            self.estimated_positions.append(est_position.copy())
-            
-            # Publish filter result
-            self.publish_filter_state(est_position, est_velocity)
-            
-            # Update visualization
-            self.update_plot()
+        # Always get and publish estimate, even without new sensor data
+        est_position, est_velocity, est_azimuth, est_elevation = self.pf.estimate_state()
+        self.estimated_positions.append(est_position.copy())
+        
+        # Publish filter result continuously
+        self.publish_filter_state(est_position, est_velocity)
+        
+        # Update visualization
+        self.update_plot()
 
     def publish_filter_state(self, position, velocity):
         "Publish filtered state"
