@@ -29,7 +29,8 @@ from bandpass_filtfilt import design_bandpass, apply_bandpass
 # ---------------------------
 
 D_M = 0.5#1.0  # distance between microphones (meters)
-SPEED_OF_SOUND = 343.0  # m/s
+SPEED_OF_SOUND = 360.0#343.0  # m/s
+SPEED_OF_SOUND_DOA= 300.0  # m/s
 
 # Frame length and overlap:
 FRAME_DUR_SEC = 0.100  # seconds
@@ -52,7 +53,7 @@ INTERP_GCC = 16
 
 # Simulation settings
 SIMULATION_MODE = True         # Toggle real/simulated audio
-SOURCE_POS = np.array([20.0, 100.0, 20.5])  # [m] source for simulation
+SOURCE_POS = np.array([-20.0, 100.0, 50.5])  # [m] source for simulation
 
 
 # File mode settings
@@ -108,7 +109,7 @@ def main():
             pairs,
             AZIMUTHS,
             ELEVATIONS,
-            SPEED_OF_SOUND
+            SPEED_OF_SOUND_DOA
         )
 
         # Main processing loop (simulate 10 Hz updates)
@@ -168,7 +169,7 @@ def main():
 
             if frame_idx == 0:
                 # Plot SRP map for first frame
-                plot_srp_map(srp_map, AZIMUTHS, ELEVATIONS, best_az, best_el)
+                plot_srp_map(srp_map, AZIMUTHS, ELEVATIONS, best_az, best_el, az_gt, el_gt)
         
         # print midian time
         median_time = np.median(frame_times)

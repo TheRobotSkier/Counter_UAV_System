@@ -16,6 +16,8 @@ import numpy as np
 from numpy.fft import rfft, irfft
 import matplotlib.pyplot as plt
 
+
+
 def build_direction_grid(
     azimuths: np.ndarray,
     elevations: np.ndarray
@@ -299,7 +301,9 @@ def plot_srp_map(
     azimuths: np.ndarray,
     elevations: np.ndarray,
     best_az: float,
-    best_el: float
+    best_el: float,
+    az_gt: float = None,
+    el_gt: float = None
 ) -> None:
     """
     Plot SRP-PHAT map and highlight best direction.
@@ -312,6 +316,7 @@ def plot_srp_map(
     plt.scatter(best_az, best_el,
                 c="white", edgecolors="black",
                 marker="v", s=120, label="Estimated DOA")
+    plt.scatter(az_gt, el_gt, marker="x", c="red", s=120, label="Ground Truth DOA")
 
     plt.xlabel("Azimuth (deg)")
     plt.ylabel("Elevation (deg)")
