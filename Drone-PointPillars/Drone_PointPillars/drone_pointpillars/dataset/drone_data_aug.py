@@ -18,7 +18,6 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
     pts, gt_bboxes_3d = data_dict['pts'], data_dict['gt_bboxes_3d']
     gt_labels, gt_names = data_dict['gt_labels'], data_dict['gt_names']
     gt_difficulty = data_dict['difficulty']
-    image_info, calib_info = data_dict['image_info'], data_dict['calib_info']
 
     sampled_pts, sampled_names, sampled_labels = [], [], []
     sampled_bboxes, sampled_difficulty = [], []
@@ -32,7 +31,14 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
 
         # 2. sample databases bboxes
         sampled_cls_list = db_sampler[name].sample(sampled_num)
+
+        if len(sampled_cls_list) == 0:
+            print("No gt in sample")
+            continue  
+
         sampled_cls_bboxes = np.array([item['box3d_lidar'] for item in sampled_cls_list], dtype=np.float32)
+        
+        sampled_cls_bboxes = sampled_cls_bboxes.reshape(-1, 7)
 
         # 3. box_collision_test
         avoid_coll_boxes_bv_corners = bbox3d2bevcorners(avoid_coll_boxes)
@@ -76,8 +82,6 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
             'gt_labels': gt_labels, 
             'gt_names': gt_names,
             'difficulty': difficulty,
-            'image_info': image_info,
-            'calib_info': calib_info
         }
     return data_dict
 
@@ -315,14 +319,13 @@ def data_augment(CLASSES, data_root, data_dict, data_aug_config):
     return: data_dict
     '''
 
-    # --- We do not use database sampling  ---
     # 1. sample databases and merge into the data.
-    #db_sampler_config = data_aug_config['db_sampler']
-    #data_dict = dbsample(CLASSES,
-    #                     data_root,
-    #                    data_dict, 
-    #                     db_sampler=db_sampler_config['db_sampler'],
-    #                     sample_groups=db_sampler_config['sample_groups'])
+    db_sampler_config = data_aug_config['db_sampler']
+    data_dict = dbsample(CLASSES,
+                         data_root,
+                         data_dict, 
+                         db_sampler=db_sampler_config['db_sampler'],
+                         sample_groups=db_sampler_config['sample_groups'])
     # 2. object noise
     object_noise_config = data_aug_config['object_noise']
     data_dict = object_noise(data_dict, 

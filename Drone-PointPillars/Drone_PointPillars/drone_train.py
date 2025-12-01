@@ -17,12 +17,23 @@ import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
 from collections import OrderedDict
 
-def load_pretrained_model(pointpillars, is_main, pretrained_path):
-    if is_main:
-        print(f'[Loading pretrained model from {pretrained_path}...]')
-    ckpt = torch.load(pretrained_path, map_location='cpu')
-    state = ckpt.get('state_dict', ckpt.get('model_state_dict', ckpt))
-    
+def load_pretrained_model(pointpillars, is_main, ckpt):    
+
+    # Choose the right key depending on how the checkpoint was saved
+    if isinstance(ckpt, dict):
+        if 'model' in ckpt:
+            state = ckpt['model']
+        elif 'state_dict' in ckpt:
+            state = ckpt['state_dict']
+        elif 'model_state_dict' in ckpt:
+            state = ckpt['model_state_dict']
+        else:
+            # assume whole dict is a state_dict
+            state = ckpt
+    else:
+        # old-style: ckpt *is* the state_dict
+        state = ckpt
+        
     # strip "module." if checkpoint came from DDP. DDP addes module to the name of each parameter.
     if any(k.startswith('module.') for k in state.keys()):
         state = OrderedDict((k.replace('module.', '', 1), v) for k, v in state.items())
@@ -40,7 +51,7 @@ def load_pretrained_model(pointpillars, is_main, pretrained_path):
 
     msg = pointpillars.load_state_dict(filtered_state, strict=False)  # (Strictload) False: gives warning if keys do not match. True: Gives error and stops.
     if is_main:
-        print(f'[Successfully loaded pretrained model (The skipped kernels can be seen above)]',flush=True)
+        print(f'[#Successfully loaded pretrained model#]',flush=True)
 
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -60,6 +71,8 @@ def save_summary(writer, loss_dict, global_step, tag, lr=None, momentum=None):
         writer.add_scalar('momentum', momentum, global_step)
 
 def main_workers(rank, world_size, args):
+    training_start_time = time.time()
+
     # --------------- DDP setup ---------------
     torch.cuda.empty_cache() # free cached memory (I had an issue where it ran out of memory)
     setup(rank,world_size) # This setup is to use multipule GPUS.
@@ -91,26 +104,39 @@ def main_workers(rank, world_size, args):
     
     # --- Initialize the model weights ---
     setup_seed() # First all are randomly initialized
-    
-    # Pointpillars with only the head changed (Amount of clases)
-    #pointpillars = PointPillars(nclasses=args.nclasses).to(rank)
 
-    # PointPillars but with more points per pillar, and a backbone with finer spatial resolution. 
-    pointpillars = PointPillars(nclasses=args.nclasses, max_num_points=100, Backbone_layer_strides=[1,2,2],upsample_strides=[1,2,4]).to(rank)
+    if args.model == 'simple':
+        # Pointpillars with only the head changed (Amount of clases)
+        pointpillars = PointPillars(nclasses=args.nclasses).to(rank)
+    elif args.model == 'advanced':
+        # PointPillars but with more points per pillar, and a backbone with finer spatial resolution. 
+        pointpillars = PointPillars(nclasses=args.nclasses, max_num_points=100, Backbone_layer_strides=[1,2,2],upsample_strides=[1,2,4]).to(rank)
     
     # Then we can try an load the pretrained model (We load only wheights that match)
+    ckpt = torch.load(args.pretrained, map_location='cpu')
+    if is_main:
+        print(f'[Loading pretrained model from {args.pretrained}...]', flush=True)
     if args.pretrained != 'None':
-        load_pretrained_model(pointpillars, is_main,args.pretrained)
-        
-    # We wrap the model in DDP, to use multipule GPUs 
-    pointpillars = torch.nn.parallel.DistributedDataParallel(pointpillars, device_ids=[rank], output_device=rank, find_unused_parameters=False)
-    
-    loss_func = Loss()
+        load_pretrained_model(pointpillars, is_main, ckpt)
 
+    loss_func = Loss()
     max_iters = len(train_dataloader) * args.max_epoch
     init_lr = args.init_lr
 
-    optimizer = torch.optim.AdamW(pointpillars.parameters(), lr=init_lr, betas=(0.95, 0.99), weight_decay=0.01) # Updated to fit new DDP model
+    # Freeze model wheights, and unfreeze detection head.
+    if args.freeze:
+        print("Freezing entire model", flush=True)
+        for param in pointpillars.parameters():
+            param.requires_grad = False
+
+        for param in pointpillars.head.parameters():
+            param.requires_grad = True
+            print("Unfreezing parameter:", param.shape, flush=True)
+
+        optimizer = torch.optim.AdamW([p for p in pointpillars.parameters() if p.requires_grad], lr=init_lr, betas=(0.95, 0.99), weight_decay=0.01)
+    else:
+        # Optmizer if the whole model is being trained
+        optimizer = torch.optim.AdamW(pointpillars.parameters(), lr=init_lr, betas=(0.95, 0.99), weight_decay=0.01) # Updated to fit new DDP model
 
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,  
                                                     max_lr=init_lr*10, 
@@ -121,13 +147,33 @@ def main_workers(rank, world_size, args):
                                                     base_momentum=0.95*0.895, 
                                                     max_momentum=0.95,
                                                     div_factor=10)
+    
+    if args.pretrained != 'None':
+        try:
+            # Load optimizer state
+            optimizer.load_state_dict(ckpt["optimizer"])
+            # Load scheduler state
+            scheduler.load_state_dict(ckpt["scheduler"])
+            # Load epoch counter
+            start_epoch = ckpt["epoch"] + 1
+
+        except Exception as e:
+            start_epoch = 0
+            if is_main:
+                print(f"[Warning] Could not load optimizer and scheduler state: {e}", flush=True)   
+    else:
+        start_epoch = 0
+
+    # We wrap the model in DDP, to use multipule GPUs 
+    pointpillars = torch.nn.parallel.DistributedDataParallel(pointpillars, device_ids=[rank], output_device=rank, find_unused_parameters=False)
+       
     saved_logs_path = os.path.join(args.saved_path, 'summary')
     os.makedirs(saved_logs_path, exist_ok=True)
     writer = SummaryWriter(saved_logs_path)
     saved_ckpt_path = os.path.join(args.saved_path, 'checkpoints')
     os.makedirs(saved_ckpt_path, exist_ok=True)
 
-    for epoch in range(args.max_epoch):
+    for epoch in range(start_epoch, args.max_epoch):
         start_time = time.time()
         train_sampler.set_epoch(epoch) # ADDED, allows shuffling with DDP
         train_step, val_step = 0, 0
@@ -199,9 +245,9 @@ def main_workers(rank, world_size, args):
             optimizer.step()
             scheduler.step()
 
-            global_step = epoch * len(train_dataloader) + train_step + 1
+            global_step = (epoch * len(train_dataloader) + train_step + 1) * (rank + 1)
             # ---- Logging, save summery  ----
-            if global_step % args.log_freq == 0 and is_main:
+            if global_step % args.log_freq == 0:
                 save_summary(writer, loss_dict, global_step, 'train',
                              lr=optimizer.param_groups[0]['lr'], 
                              momentum=optimizer.param_groups[0]['betas'][0])
@@ -216,9 +262,20 @@ def main_workers(rank, world_size, args):
         # ----- Save checkpoint ----- 
         # We save the model only from the first GPU process to avoid them overwriting each other. 
         dist.barrier()  # Synchronize all processes before saving
-        if is_main and (epoch + 1) % args.ckpt_freq_epoch == 0 or (is_main and (epoch + 1) == args.max_epoch):
+
+        # check overall elapsed time since training_start_time (11 hours 30 minutes)
+        elapsed_since_start = time.time() - training_start_time
+        time_limit_reached = elapsed_since_start >= (11.5 * 60 * 60)
+
+        if is_main and ((epoch + 1) % args.ckpt_freq_epoch == 0 or (epoch + 1) == args.max_epoch or time_limit_reached):
             print("GPU ", rank, '=' * 20, " saving checkpoint...",'=' * 20, flush=True)
-            to_save = pointpillars.module.state_dict() if hasattr(pointpillars, 'module') else pointpillars.state_dict()
+            to_save = {
+                "model": pointpillars.module.state_dict()
+                        if hasattr(pointpillars, "module") else pointpillars.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "epoch": epoch
+            }
             torch.save(to_save, os.path.join(saved_ckpt_path, f'epoch_{epoch+1}.pth'))
 
         # ----- Validation ----- 
@@ -276,8 +333,9 @@ def main_workers(rank, world_size, args):
                                     batched_bbox_reg=batched_bbox_reg, 
                                     batched_dir_labels=batched_dir_labels)
                 
-                global_step = epoch * len(val_dataloader) + val_step + 1
-                if global_step % args.log_freq == 0 and is_main:
+                # We acount for multiple GPUs when logging (rank)
+                global_step = (epoch * len(val_dataloader) + val_step + 1) * (rank + 1)
+                if global_step % args.log_freq == 0:
                     save_summary(writer, loss_dict, global_step, 'val')
                 val_step += 1
         pointpillars.train()
@@ -301,6 +359,8 @@ if __name__ == '__main__':
     parser.add_argument('--world_size', type=int, default=1) # number of gpus for training
     parser.add_argument('--pretrained', default='None')
     parser.add_argument('--validation', action='store_true', help='whether to run validation')
+    parser.add_argument('--model', type=str, default='simple', help='model type')
+    parser.add_argument('--freeze', action='store_true')
     args = parser.parse_args()
 
     # Multiprocessing for multiple GPUs

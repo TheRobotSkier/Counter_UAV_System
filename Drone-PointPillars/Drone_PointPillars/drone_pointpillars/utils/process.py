@@ -108,6 +108,15 @@ def bbox3d2bevcorners(bboxes):
 
     return: shape=(n, 4, 2)
     '''
+    # ensure input is an (N,7) numpy array (handle single box or list inputs)
+    #bboxes = np.asarray(bboxes, dtype=np.float32)
+    #if bboxes.size == 0:
+    #    return np.zeros((0, 4, 2), dtype=np.float32)
+    #if bboxes.ndim == 1:
+    #    bboxes = bboxes[None, :]
+    #if bboxes.shape[1] != 7:
+    #    raise ValueError(f"bbox expected shape (N,7), got {bboxes.shape}")
+    
     centers, dims, angles = bboxes[:, :2], bboxes[:, 3:5], bboxes[:, 6]
 
     # 1.generate bbox corner coordinates, clockwise from minimal point

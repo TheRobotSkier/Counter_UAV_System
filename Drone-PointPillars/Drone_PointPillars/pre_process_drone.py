@@ -7,7 +7,7 @@ CUR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(CUR)
 
 from drone_pointpillars.utils import read_points, read_label, \
-    write_pickle, get_points_num_in_bbox \
+    write_pickle, get_points_num_in_bbox, write_points, points_in_bboxes_v2
     
 def judge_difficulty(annotation_dict):
     truncated = annotation_dict['truncated']
@@ -35,16 +35,34 @@ def create_data_info_pkl(data_root, data_type, prefix, label=True, ids=None ,db=
 
     split = 'training' if label else 'testing'
 
-    kitti_infos_dict = {}
+    drone_infos_dict = {}
+    
+    if db:
+        # Create gt database for data augmentation
+        drone_dbinfos_train = {}
+        db_points_saved_path = os.path.join(data_root, f'{prefix}_gt_database')
+        os.makedirs(db_points_saved_path, exist_ok=True)
+
+        # We do not have a cam, so we use a fixed identity matrix for tr_velo_to_cam and r0_rect
+        Tr_velo_to_cam_3x4 = np.array([
+        [ 0., -1.,  0., 0.],
+        [ 0.,  0., -1., 0.],
+        [ 1.,  0.,  0., 0.],
+        ], dtype=np.float32)
+
+        tr_velo_to_cam = np.eye(4, dtype=np.float32)
+        tr_velo_to_cam[:3, :] = Tr_velo_to_cam_3x4
+
+        r0_rect = np.eye(4, dtype=np.float32)
+        r0_rect[:3, :3] = np.eye(3, dtype=np.float32)  # 0_rect
   
     for id in tqdm(ids):
-    
         cur_info_dict={}
-        
         id_str = str(id).zfill(6)
-    
-        lidar_path = os.path.join(data_root, split,'set2' ,'bin', f'{id_str}.bin')
- 
+        
+        # Create directory to save points in gt bboxes for database augmentation
+        lidar_path = os.path.join(data_root, split,'set3' ,'bin', f'{id_str}.bin')
+        
         cur_info_dict['velodyne_path'] = sep.join(lidar_path.split(sep)[-4:])
         
         print(lidar_path)
@@ -56,7 +74,7 @@ def create_data_info_pkl(data_root, data_type, prefix, label=True, ids=None ,db=
             break
     
         if label:
-            label_path = os.path.join(data_root, split, 'set2', 'label', f'{id_str}.txt')
+            label_path = os.path.join(data_root, split, 'set3', 'label', f'{id_str}.txt')
             annotation_dict = read_label(label_path)
             annotation_dict['difficulty'] = judge_difficulty(annotation_dict)
             annotation_dict['num_points_in_gt'] = get_points_num_in_bbox(
@@ -69,15 +87,51 @@ def create_data_info_pkl(data_root, data_type, prefix, label=True, ids=None ,db=
                 name=annotation_dict['name'])
             cur_info_dict['annos'] = annotation_dict
 
-        kitti_infos_dict[int(id)] = cur_info_dict
+        drone_infos_dict[int(id)] = cur_info_dict
 
+        if db:
+            indices, n_total_bbox, n_valid_bbox, bboxes_lidar, name = \
+                points_in_bboxes_v2(
+                    points=lidar_points,
+                    r0_rect=r0_rect.astype(np.float32), 
+                    tr_velo_to_cam=tr_velo_to_cam.astype(np.float32),
+                    dimensions=annotation_dict['dimensions'].astype(np.float32),
+                    location=annotation_dict['location'].astype(np.float32),
+                    rotation_y=annotation_dict['rotation_y'].astype(np.float32),
+                    name=annotation_dict['name']    
+                )
+            for j in range(n_valid_bbox):
+                db_points = lidar_points[indices[:, j]]
+                db_points[:, :3] -= bboxes_lidar[j, :3]
+                db_points_saved_name = os.path.join(db_points_saved_path, f'{int(id)}_{name[j]}_{j}.bin')
+                write_points(db_points, db_points_saved_name)
+
+                db_info={
+                    'name': name[j],
+                    'path': os.path.join(os.path.basename(db_points_saved_path), f'{int(id)}_{name[j]}_{j}.bin'),
+                    'box3d_lidar': bboxes_lidar[j],
+                    'difficulty': annotation_dict['difficulty'][j], 
+                    'num_points_in_gt': len(db_points), 
+                }
+                
+                if name[j] not in drone_dbinfos_train:
+                    drone_dbinfos_train[name[j]] = [db_info]
+                else:
+                    drone_dbinfos_train[name[j]].append(db_info)
+                    #print(db_info)
+        
         id += 1
 
-    saved_path = os.path.join(data_root,split,'set2', f'{prefix}_infos_{data_type}.pkl')
-    write_pickle(kitti_infos_dict, saved_path)
+    if db:
+        db_info_path = os.path.join(data_root, f'{prefix}_dbinfos_train.pkl')
+        write_pickle(drone_dbinfos_train, db_info_path)
+        print(f'Database info pkl file is saved to {db_info_path}')
+
+    saved_path = os.path.join(data_root,split,'set3', f'{prefix}_infos_{data_type}.pkl')
+    write_pickle(drone_infos_dict, saved_path)
     print(f'{data_type} data info pkl file is saved to {saved_path}')
-  
-    return kitti_infos_dict
+    
+    return drone_infos_dict
 
 def main(args):
     data_root = args.data_root
@@ -101,18 +155,18 @@ def main(args):
 
     ## 1. train: create data infomation pkl file 
     ##           && create database(points in gt bbox) for data aumentation
-    kitti_train_infos_dict = create_data_info_pkl(data_root, 'train', prefix, ids=train_ids, db=False)
+    drone_train_infos_dict = create_data_info_pkl(data_root, 'train', prefix, ids=train_ids, db=True)
 
     ## 2. val: create data infomation pkl file 
-    kitti_val_infos_dict = create_data_info_pkl(data_root, 'val', prefix, ids=val_ids)
+    drone_val_infos_dict = create_data_info_pkl(data_root, 'val', prefix, ids=val_ids, db=False)
     
     ## 3. trainval: create data infomation pkl file
-    #kitti_trainval_infos_dict = {**kitti_train_infos_dict, **kitti_val_infos_dict}
+    #drone_trainval_infos_dict = {**drone_train_infos_dict, **drone_val_infos_dict}
     #saved_path = os.path.join(data_root, f'{prefix}_infos_trainval.pkl')
-    #write_pickle(kitti_trainval_infos_dict, saved_path)
+    #write_pickle(drone_trainval_infos_dict, saved_path)
 
     ## 4. test: create data infomation pkl file
-    kitti_test_infos_dict = create_data_info_pkl(data_root, 'test', prefix, label=True, ids=test_ids)
+    drone_test_infos_dict = create_data_info_pkl(data_root, 'test', prefix, ids=test_ids, db=False)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Dataset infomation')

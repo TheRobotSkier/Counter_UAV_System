@@ -44,17 +44,20 @@ class DroneDataset(Dataset):
         self.split = split
         self.data_infos = read_pickle(os.path.join(data_root, f'drone_infos_{split}.pkl'))
         self.sorted_ids = list(self.data_infos.keys())
-        #db_infos = read_pickle(os.path.join(data_root, 'kitti_db_infos_train.pkl'))
-        #db_infos = self.filter_db(db_infos)
+        db_infos = read_pickle(os.path.join(data_root, 'drone_dbinfos_train.pkl'))
+        db_infos = self.filter_db(db_infos)
 
-        #db_sampler = {}
-        #for cat_name in self.CLASSES:
-        #    db_sampler[cat_name] = BaseSampler(db_infos[cat_name], shuffle=True)
+        db_sampler = {}
+        for cat_name in self.CLASSES:
+            db_sampler[cat_name] = BaseSampler(db_infos[cat_name], shuffle=True)
+        # length of db_sampler for drone
+        #print(f'Length of db_sampler for drone: {len(db_sampler["Drone"])}')
+
         self.data_aug_config=dict(
-            #db_sampler=dict(
-            #    db_sampler=db_sampler,
-            #    sample_groups=dict(Car=15, Pedestrian=10, Cyclist=10)
-            #),
+            db_sampler=dict(
+                db_sampler=db_sampler,
+                sample_groups=dict(Drone=15)
+            ),
             object_noise=dict(
                 num_try=100,
                 translation_std=[0.25, 0.25, 0.25],
@@ -77,12 +80,12 @@ class DroneDataset(Dataset):
         return annos_info
 
     def filter_db(self, db_infos):
-        # 1. filter_by_difficulty
-        for k, v in db_infos.items():
-            db_infos[k] = [item for item in v if item['difficulty'] != -1]
+        # 1. filter_by_difficulty (WE DO NOT USE DIFFICULTY LEVEL IN DRONE DATASET)
+        #for k, v in db_infos.items():
+        #    db_infos[k] = [item for item in v if item['difficulty'] != -1]
 
         # 2. filter_by_min_points, dict(Car=5, Pedestrian=10, Cyclist=10)
-        filter_thrs = dict(Car=5, Pedestrian=10, Cyclist=10)
+        filter_thrs = dict(Drone=5)
         for cat in self.CLASSES:
             filter_thr = filter_thrs[cat]
             db_infos[cat] = [item for item in db_infos[cat] if item['num_points_in_gt'] >= filter_thr]
@@ -147,6 +150,6 @@ class DroneDataset(Dataset):
 
 if __name__ == '__main__':
 
-    kitti_data = DroneDataset(data_root='/mnt/ssd1/lifa_rdata/det/kitti',
+    drone_data = DroneDataset(data_root='/mnt/ssd1/lifa_rdata/det/drone',
                        split='train')
-    kitti_data.__getitem__(9)
+    drone_data.__getitem__(9)

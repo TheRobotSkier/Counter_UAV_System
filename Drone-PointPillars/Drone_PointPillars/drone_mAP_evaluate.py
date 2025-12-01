@@ -8,382 +8,31 @@ import csv
 
 from drone_pointpillars.utils import \
     keep_bbox_from_lidar_range, write_pickle, write_label, \
-    iou2d, iou3d_camera, iou_bev
+    iou2d, iou3d, iou_bev
 from drone_pointpillars.dataset import DroneDataset, get_dataloader
 from drone_pointpillars.model import PointPillars 
 
 
-def get_score_thresholds(tp_scores, total_num_valid_gt, num_sample_pts=41):
-    score_thresholds = []
-    tp_scores = sorted(tp_scores)[::-1]
-    cur_recall, pts_ind = 0, 0
-    for i, score in enumerate(tp_scores):
-        lrecall = (i + 1) / total_num_valid_gt
-        rrecall = (i + 2) / total_num_valid_gt
+def CsvWriteFramePredictions(csv_writer, frame_id, gt_boxes_3d, pred_boxes_3d, pred_labels, pred_scores):
 
-        if i == len(tp_scores) - 1:
-            score_thresholds.append(score)
-            break
+    for gidx, gb in enumerate(gt_boxes_3d):
+        # gb expected as [x,y,z,w,l,h,yaw] or bbox format you prefer
+        csv_writer.writerow([frame_id, gidx, 'GT',
+                            float(gb[0]), float(gb[1]), float(gb[2]),
+                            float(gb[3]), float(gb[4]), float(gb[5]),
+                            float(gb[6])])
 
-        if (lrecall + rrecall) / 2 < cur_recall:
-            continue
-
-        score_thresholds.append(score)
-        pts_ind += 1
-        cur_recall = pts_ind / (num_sample_pts - 1)
-    return score_thresholds
-
-
-def do_eval(det_results, gt_results, CLASSES, saved_path):
-    '''
-    det_results: list,
-    gt_results: dict(id -> det_results)
-    CLASSES: dict
-    '''
-    assert len(det_results) == len(gt_results)
-    f = open(os.path.join(saved_path, 'eval_results.txt'), 'w')
-
-    # 1. calculate iou
-    ious = {
-        'bbox_2d': [],
-        'bbox_bev': [],
-        'bbox_3d': []
-    }
-    ids = list(sorted(gt_results.keys()))
-    for id in ids:
-        gt_result = gt_results[id]['annos']
-        det_result = det_results[id]
-
-        # 1.1, 2d bboxes iou
-        gt_bboxes2d = gt_result['bbox'].astype(np.float32)
-        det_bboxes2d = det_result['bbox'].astype(np.float32)
-        iou2d_v = iou2d(torch.from_numpy(gt_bboxes2d).cuda(), torch.from_numpy(det_bboxes2d).cuda())
-        ious['bbox_2d'].append(iou2d_v.cpu().numpy())
-
-        # 1.2, bev iou
-        gt_location = gt_result['location'].astype(np.float32)
-        gt_dimensions = gt_result['dimensions'].astype(np.float32)
-        gt_rotation_y = gt_result['rotation_y'].astype(np.float32)
-        det_location = det_result['location'].astype(np.float32)
-        det_dimensions = det_result['dimensions'].astype(np.float32)
-        det_rotation_y = det_result['rotation_y'].astype(np.float32)
-
-        gt_bev = np.concatenate([gt_location[:, [0, 2]], gt_dimensions[:, [0, 2]], gt_rotation_y[:, None]], axis=-1)
-        det_bev = np.concatenate([det_location[:, [0, 2]], det_dimensions[:, [0, 2]], det_rotation_y[:, None]], axis=-1)
-        iou_bev_v = iou_bev(torch.from_numpy(gt_bev).cuda(), torch.from_numpy(det_bev).cuda())
-        ious['bbox_bev'].append(iou_bev_v.cpu().numpy())
-
-        # 1.3, 3dbboxes iou
-        gt_bboxes3d = np.concatenate([gt_location, gt_dimensions, gt_rotation_y[:, None]], axis=-1)
-        det_bboxes3d = np.concatenate([det_location, det_dimensions, det_rotation_y[:, None]], axis=-1)
-        iou3d_v = iou3d_camera(torch.from_numpy(gt_bboxes3d).cuda(), torch.from_numpy(det_bboxes3d).cuda())
-        ious['bbox_3d'].append(iou3d_v.cpu().numpy())
-
-    # Removed other classes for drone dataset
-    MIN_IOUS = {
-        'Drone': [0.5, 0.5, 0.5]
-    }
-    MIN_HEIGHT = [40, 25, 25]
-
-    overall_results = {}
-    for e_ind, eval_type in enumerate(['bbox_2d', 'bbox_bev', 'bbox_3d']):
-        eval_ious = ious[eval_type]
-        eval_ap_results, eval_aos_results = {}, {}
-        for cls in CLASSES:
-            eval_ap_results[cls] = []
-            eval_aos_results[cls] = []
-            CLS_MIN_IOU = MIN_IOUS[cls][e_ind]
-            for difficulty in [0, 1, 2]:
-                # 1. bbox property
-                total_gt_ignores, total_det_ignores, total_dc_bboxes, total_scores = [], [], [], []
-                total_gt_alpha, total_det_alpha = [], []
-                for id in ids:
-                    gt_result = gt_results[id]['annos']
-                    det_result = det_results[id]
-
-                    # 1.1 gt bbox property
-                    cur_gt_names = gt_result['name']
-                    cur_difficulty = gt_result['difficulty']
-                    gt_ignores, dc_bboxes = [], []
-                    for j, cur_gt_name in enumerate(cur_gt_names):
-                        ignore = cur_difficulty[j] < 0 or cur_difficulty[j] > difficulty
-                        if cur_gt_name == cls:
-                            valid_class = 1
-                        elif cls == 'Pedestrian' and cur_gt_name == 'Person_sitting':
-                            valid_class = 0
-                        elif cls == 'Car' and cur_gt_name == 'Van':
-                            valid_class = 0
-                        else:
-                            valid_class = -1
-                        
-                        if valid_class == 1 and not ignore:
-                            gt_ignores.append(0)
-                        elif valid_class == 0 or (valid_class == 1 and ignore):
-                            gt_ignores.append(1)
-                        else:
-                            gt_ignores.append(-1)
-                        
-                        if cur_gt_name == 'DontCare':
-                            dc_bboxes.append(gt_result['bbox'][j])
-                    total_gt_ignores.append(gt_ignores)
-                    total_dc_bboxes.append(np.array(dc_bboxes))
-                    total_gt_alpha.append(gt_result['alpha'])
-
-                    # 1.2 det bbox property
-                    cur_det_names = det_result['name']
-                    cur_det_heights = det_result['bbox'][:, 3] - det_result['bbox'][:, 1]
-                    det_ignores = []
-                    for j, cur_det_name in enumerate(cur_det_names):
-                        if cur_det_heights[j] < MIN_HEIGHT[difficulty]:
-                            det_ignores.append(1)
-                        elif cur_det_name == cls:
-                            det_ignores.append(0)
-                        else:
-                            det_ignores.append(-1)
-                    total_det_ignores.append(det_ignores)
-                    total_scores.append(det_result['score'])
-                    total_det_alpha.append(det_result['alpha'])
-
-                # 2. calculate scores thresholds for PR curve
-                tp_scores = []
-                for i, id in enumerate(ids):
-                    cur_eval_ious = eval_ious[i]
-                    gt_ignores, det_ignores = total_gt_ignores[i], total_det_ignores[i]
-                    scores = total_scores[i]
-
-                    nn, mm = cur_eval_ious.shape
-                    assigned = np.zeros((mm, ), dtype=np.bool_)
-                    for j in range(nn):
-                        if gt_ignores[j] == -1:
-                            continue
-                        match_id, match_score = -1, -1
-                        for k in range(mm):
-                            if not assigned[k] and det_ignores[k] >= 0 and cur_eval_ious[j, k] > CLS_MIN_IOU and scores[k] > match_score:
-                                match_id = k
-                                match_score = scores[k]
-                        if match_id != -1:
-                            assigned[match_id] = True
-                            if det_ignores[match_id] == 0 and gt_ignores[j] == 0:
-                                tp_scores.append(match_score)
-                total_num_valid_gt = np.sum([np.sum(np.array(gt_ignores) == 0) for gt_ignores in total_gt_ignores])
-                score_thresholds = get_score_thresholds(tp_scores, total_num_valid_gt)    
-            
-                # 3. draw PR curve and calculate mAP
-                tps, fns, fps, total_aos = [], [], [], []
-
-                for score_threshold in score_thresholds:
-                    tp, fn, fp = 0, 0, 0
-                    aos = 0
-                    for i, id in enumerate(ids):
-                        cur_eval_ious = eval_ious[i]
-                        gt_ignores, det_ignores = total_gt_ignores[i], total_det_ignores[i]
-                        gt_alpha, det_alpha = total_gt_alpha[i], total_det_alpha[i]
-                        scores = total_scores[i]
-
-                        nn, mm = cur_eval_ious.shape
-                        assigned = np.zeros((mm, ), dtype=np.bool_)
-                        for j in range(nn):
-                            if gt_ignores[j] == -1:
-                                continue
-                            match_id, match_iou = -1, -1
-                            for k in range(mm):
-                                if not assigned[k] and det_ignores[k] >= 0 and scores[k] >= score_threshold and cur_eval_ious[j, k] > CLS_MIN_IOU:
-    
-                                    if det_ignores[k] == 0 and cur_eval_ious[j, k] > match_iou:
-                                        match_iou = cur_eval_ious[j, k]
-                                        match_id = k
-                                    elif det_ignores[k] == 1 and match_iou == -1:
-                                        match_id = k
-
-                            if match_id != -1:
-                                assigned[match_id] = True
-                                if det_ignores[match_id] == 0 and gt_ignores[j] == 0:
-                                    tp += 1
-                                    if eval_type == 'bbox_2d':
-                                        aos += (1 + np.cos(gt_alpha[j] - det_alpha[match_id])) / 2
-                            else:
-                                if gt_ignores[j] == 0:
-                                    fn += 1
-                            
-                        for k in range(mm):
-                            if det_ignores[k] == 0 and scores[k] >= score_threshold and not assigned[k]:
-                                fp += 1
-                        
-                        # In case 2d bbox evaluation, we should consider dontcare bboxes
-                        if eval_type == 'bbox_2d':
-                            dc_bboxes = total_dc_bboxes[i]
-                            det_bboxes = det_results[id]['bbox']
-                            if len(dc_bboxes) > 0:
-                                ious_dc_det = iou2d(torch.from_numpy(det_bboxes), torch.from_numpy(dc_bboxes), metric=1).numpy().T
-                                for j in range(len(dc_bboxes)):
-                                    for k in range(len(det_bboxes)):
-                                        if det_ignores[k] == 0 and scores[k] >= score_threshold and not assigned[k]:
-                                            if ious_dc_det[j, k] > CLS_MIN_IOU:
-                                                fp -= 1
-                                                assigned[k] = True
-                            
-                    tps.append(tp)
-                    fns.append(fn)
-                    fps.append(fp)
-                    if eval_type == 'bbox_2d':
-                        total_aos.append(aos)
-
-                tps, fns, fps = np.array(tps), np.array(fns), np.array(fps)
-
-                recalls = tps / (tps + fns)
-                precisions = tps / (tps + fps)
-                for i in range(len(score_thresholds)):
-                    precisions[i] = np.max(precisions[i:])
-                
-                sums_AP = 0
-                for i in range(0, len(score_thresholds), 4):
-                    sums_AP += precisions[i]
-                mAP = sums_AP / 11 * 100
-                eval_ap_results[cls].append(mAP)
-
-                if eval_type == 'bbox_2d':
-                    total_aos = np.array(total_aos)
-                    similarity = total_aos / (tps + fps)
-                    for i in range(len(score_thresholds)):
-                        similarity[i] = np.max(similarity[i:])
-                    sums_similarity = 0
-                    for i in range(0, len(score_thresholds), 4):
-                        sums_similarity += similarity[i]
-                    mSimilarity = sums_similarity / 11 * 100
-                    eval_aos_results[cls].append(mSimilarity)
-
-        print(f'=========={eval_type.upper()}==========')
-        print(f'=========={eval_type.upper()}==========', file=f)
-        for k, v in eval_ap_results.items():
-            print(f'{k} AP@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}')
-            print(f'{k} AP@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}', file=f)
-        if eval_type == 'bbox_2d':
-            print(f'==========AOS==========')
-            print(f'==========AOS==========', file=f)
-            for k, v in eval_aos_results.items():
-                print(f'{k} AOS@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}')
-                print(f'{k} AOS@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}', file=f)
-        
-        overall_results[eval_type] = np.mean(list(eval_ap_results.values()), 0)
-        if eval_type == 'bbox_2d':
-            overall_results['AOS'] = np.mean(list(eval_aos_results.values()), 0)
-    
-    print(f'\n==========Overall==========')
-    print(f'\n==========Overall==========', file=f)
-    for k, v in overall_results.items():
-        print(f'{k} AP: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}')
-        print(f'{k} AP: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}', file=f)
-    f.close()
-    
-
-
-def old(args):
-    val_dataset = DroneDataset(data_root=args.data_root,
-                        split='val')
-    val_dataloader = get_dataloader(dataset=val_dataset, 
-                                    batch_size=args.batch_size, 
-                                    num_workers=args.num_workers,
-                                    shuffle=False)
-    CLASSES = DroneDataset.CLASSES
-    LABEL2CLASSES = {v:k for k, v in CLASSES.items()}
-
-    # Setup the model and load checkpoint
-    model = PointPillars(nclasses=args.nclasses)
-    model.load_state_dict(torch.load(args.ckpt, map_location=torch.device('cpu')))
-    
-    saved_path = args.saved_path
-    os.makedirs(saved_path, exist_ok=True)
-    saved_submit_path = os.path.join(saved_path, 'submit')
-    os.makedirs(saved_submit_path, exist_ok=True)
-
-    pcd_limit_range = np.array([0, -40, -3, 70.4, 40, 0.0], dtype=np.float32)
-
-    model.eval()
-    idx = 0
-    with torch.no_grad():
-        format_results = {}
-        print('Predicting and Formatting the results.')
-        for i, data_dict in enumerate(tqdm(val_dataloader)):
-            if not args.no_cuda:
-                # move the tensors to the cuda
-                for key in data_dict:
-                    for j, item in enumerate(data_dict[key]):
-                        if torch.is_tensor(item):
-                            data_dict[key][j] = data_dict[key][j].cuda()
-            
-            batched_pts = data_dict['batched_pts']
-            batched_gt_bboxes = data_dict['batched_gt_bboxes']
-            batched_labels = data_dict['batched_labels']
-            batched_difficulty = data_dict['batched_difficulty']
-            batch_results = model(batched_pts=batched_pts, 
-                                  mode='val',
-                                  batched_gt_bboxes=batched_gt_bboxes, 
-                                  batched_gt_labels=batched_labels)
-            # pdb.set_trace()
-            for j, result in enumerate(batch_results):
-                format_result = {
-                    'name': [],
-                    'truncated': [],
-                    'occluded': [],
-                    'alpha': [],
-                    'bbox': [],
-                    'dimensions': [],
-                    'location': [],
-                    'rotation_y': [],
-                    'score': []
-                }
-                
-                #calib_info = data_dict['batched_calib_info'][j]
-                #tr_velo_to_cam = calib_info['Tr_velo_to_cam'].astype(np.float32)
-                #r0_rect = calib_info['R0_rect'].astype(np.float32)
-
-                #tr_velo_to_cam = np.eye(4, dtype=np.float32)
-                #r0_rect = np.eye(4, dtype=np.float32)
-
-                Tr_velo_to_cam_3x4 = np.array([
-                [ 0., -1.,  0., 0.],
-                [ 0.,  0., -1., 0.],
-                [ 1.,  0.,  0., 0.],
-                ], dtype=np.float32)
-
-                tr_velo_to_cam = np.eye(4, dtype=np.float32)
-                tr_velo_to_cam[:3, :] = Tr_velo_to_cam_3x4
-
-                r0_rect = np.eye(4, dtype=np.float32)
-                r0_rect[:3, :3] = np.eye(3, dtype=np.float32)  # 0_rect
-
-                #P2 = calib_info['P2'].astype(np.float32)
-                #image_shape = data_dict['batched_img_info'][j]['image_shape']
-                #idx = data_dict['batched_img_info'][j]['image_idx']
-                #result_filter = keep_bbox_from_image_range(result, tr_velo_to_cam, r0_rect, P2, image_shape)
-                result_filter = keep_bbox_from_lidar_range(result, pcd_limit_range)
-
-                lidar_bboxes = result_filter['lidar_bboxes']
-                labels, scores = result_filter['labels'], result_filter['scores']
-                bboxes2d, camera_bboxes = result_filter['bboxes2d'], result_filter['camera_bboxes']
-                for lidar_bbox, label, score, bbox2d, camera_bbox in \
-                    zip(lidar_bboxes, labels, scores, bboxes2d, camera_bboxes):
-                    format_result['name'].append(LABEL2CLASSES[label])
-                    format_result['truncated'].append(0.0)
-                    format_result['occluded'].append(0)
-                    alpha = camera_bbox[6] - np.arctan2(camera_bbox[0], camera_bbox[2])
-                    format_result['alpha'].append(alpha)
-                    format_result['bbox'].append(bbox2d)
-                    format_result['dimensions'].append(camera_bbox[3:6])
-                    format_result['location'].append(camera_bbox[:3])
-                    format_result['rotation_y'].append(camera_bbox[6])
-                    format_result['score'].append(score)
-                
-                write_label(format_result, os.path.join(saved_submit_path, f'{idx:06d}.txt'))
-
-                format_results[idx] = {k:np.array(v) for k, v in format_result.items()}
-
-                idx += 1
-        
-        write_pickle(format_results, os.path.join(saved_path, 'results.pkl'))
-    
-    print('Evaluating.. Please wait several seconds.')
-    do_eval(format_results, val_dataset.data_infos, CLASSES, saved_path)
+    # write predicted rows with box_type = 'PRED'
+    pred_num = pred_boxes_3d.shape[0] if pred_boxes_3d is not None else 0
+    print(f"Amount of predictions in frame {frame_id}: {pred_num} ")
+    for bidx in range(pred_num):
+        bb = pred_boxes_3d[bidx]
+        lbl = int(pred_labels[bidx]) if pred_labels.size else -1
+        sc = float(pred_scores[bidx]) if pred_scores.size else 0.0
+        csv_writer.writerow([frame_id, bidx, 'PRED',
+                            float(bb[0]), float(bb[1]), float(bb[2]),
+                            float(bb[3]), float(bb[4]), float(bb[5]),
+                            float(bb[6]), lbl, sc])
 
 def main(args):
     print("Loading dataset...")
@@ -401,7 +50,27 @@ def main(args):
         model = PointPillars(nclasses=args.nclasses, max_num_points=100, Backbone_layer_strides=[1,2,2],upsample_strides=[1,2,4]).cuda()
     
     print("Loading model...")
-    model.load_state_dict(torch.load(args.ckpt))
+    ckpt = torch.load(args.ckpt, map_location='cpu')
+    # Choose the right key depending on how the checkpoint was saved
+    if isinstance(ckpt, dict):
+        if 'model' in ckpt:
+            state = ckpt['model']
+        elif 'state_dict' in ckpt:
+            state = ckpt['state_dict']
+        elif 'model_state_dict' in ckpt:
+            state = ckpt['model_state_dict']
+        else:
+            # assume whole dict is a state_dict
+            state = ckpt
+    else:
+        # old-style: ckpt *is* the state_dict
+        state = ckpt
+
+    model.load_state_dict(state)
+    model.eval()
+
+    # Print model architecture
+    print(model)
 
     saved_path = args.saved_path
     os.makedirs(saved_path, exist_ok=True)
@@ -412,13 +81,68 @@ def main(args):
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(['frame_id','box_id','box_type','x','y','z','w','l','h','yaw','label','score'])
 
-    model.eval()
-    # Prepare iou storage
-    # Run the model 
-    with torch.no_grad(): # no gradient computation, faster since we don't need it when evaluating
-        print('Running model...')
-        for i, data_dict in enumerate(tqdm(val_dataloader)):
+    """
+    Steps in MAP evaluation:
+    1. For each frame, get the predicted boxes and ground truth boxes. Then sort by confidence score
+    2. Compute IoU between predicted boxes and ground truth boxes, and assign True Positive (TP) and False Positive (FP)
+    3. Compute Precision-Recall curve and Average Precision (AP)
+    """
+    predictions = []
+    gt_by_frame = {}
 
+    ious = {
+        'bbox_bev': [],
+        'bbox_3d': []
+    }
+
+    IoU_thresholds = [0.5, 0.5]  # for bev and 3d
+
+    '''
+    # Box layout: [x, y, z, w, l, h, yaw]
+    gt_box = torch.tensor([
+        0.0,  # x
+        0.0,  # y
+        0.0,  # z
+        2.0,  # w
+        2.0,  # l
+        2.0,  # h
+        0.0   # yaw
+    ])
+
+    pred_box = torch.tensor([
+        2.0 / 7.0,  # x shift ~0.2857
+        0.0,        # y
+        4.0 / 9.0,  # z shift ~0.4444
+        2.0,        # w
+        2.0,        # l
+        2.0,        # h
+        0.0         # yaw
+    ])
+
+    # This mimics the structure you use in your evaluation loop
+    gts = [{"box": gt_box, "used_bev": False, "used_3d": False}]
+    pred_box_3d_np = pred_box.numpy()  # your code expects numpy here
+    
+    gt_boxes_3d = torch.stack([g["box"] for g in gts]).float().cuda() # (num_gt, 7)
+    gt_bev = gt_boxes_3d[:, [0, 1, 3, 4, 6]]                          # (num_gt, 5)
+    
+    pred_box_3d = torch.from_numpy(pred_box_3d_np).float().cuda()   # (7,)
+    pred_box_3d_t = pred_box_3d.unsqueeze(0)                        # (1, 7)
+    pred_bev = pred_box_3d_t[:, [0, 1, 3, 4, 6]]                    # (1, 5)
+
+    # Calculate BEV IoU if we have gt and det boxes
+    iou_bev_v = iou_bev(gt_bev, pred_bev) 
+    iou3d_v = iou3d(gt_boxes_3d, pred_box_3d_t)
+    print(f"BEV IoU: {iou_bev_v}, 3D IoU: {iou3d_v}")
+    return
+    ''' 
+    
+    # -----------------------------------------------------------
+    # 1) For each frame, get the predicted and ground truth boxes 
+    # -----------------------------------------------------------
+    with torch.no_grad(): # no gradient computation, faster since we don't need it when evaluating
+        print('Generating model predictions...')
+        for i, data_dict in enumerate(tqdm(val_dataloader)):
             # move the tensors to the cuda
             for key in data_dict:
                 for j, item in enumerate(data_dict[key]):
@@ -430,56 +154,185 @@ def main(args):
             batched_labels = data_dict['batched_labels']
             batch_results = model(batched_pts=batched_pts, mode='val')
 
-            # Loop troguh batch results and compare with ground truth
+            # Loop troguh batch results and save prediction(s) and ground truth(s)
             for j, result in enumerate(batch_results):
                 frame_id = i * args.batch_size + j
 
+                # ----------------- Predictions -----------------
                 # Check if there where any predictions (dict) or not (empty lists)
                 if isinstance(result, dict):
                     pred = result
-
                 elif isinstance(result, (tuple, list)):
                     pred = {
                         'lidar_bboxes': result[0],
                         'labels': result[1],
                         'scores': result[2]
                     }
+                    
+                # ----------------- Save predictions for mAP evaluation -----------------
+                for k in range(len(pred.get('scores', []))):
+                    predictions.append({
+                        "frame_id": frame_id,
+                        "box": pred['lidar_bboxes'][k],  # (7,)
+                        "score": pred['scores'][k].item()
+                    })
 
-                
-                # ensure numpy arrays for preds
-                boxes = np.asarray(pred.get('lidar_bboxes', []))
-                labels = np.asarray(pred.get('labels', []))
-                scores = np.asarray(pred.get('scores', []))
+                # ----------------- Save ground truth for mAP evaluation -----------------
+                gt_boxes_3d = batched_gt_bboxes[j]  # torch tensor, shape (num_gt, 7) on CUDA
+                gt_by_frame.setdefault(frame_id, [])
+                for gt in gt_boxes_3d:         
+                    gt_by_frame[frame_id].append({"box": gt, "used_bev": False, "used_3d": False})    
 
-                # write GT rows (one row per GT box) with box_type = 'GT'
-                gt_boxes = batched_gt_bboxes[j]
-                # convert possible torch tensor to numpy
-                if torch.is_tensor(gt_boxes):
-                    gt_boxes = gt_boxes.cpu().numpy()
-
+                # ------------ Save predictions and GT to CSV for local visualisation ------------ 
                 if args.csv:
-                    for gidx, gb in enumerate(gt_boxes):
-                        # gb expected as [x,y,z,w,l,h,yaw] or bbox format you prefer
-                        csv_writer.writerow([frame_id, gidx, 'GT',
-                                            float(gb[0]), float(gb[1]), float(gb[2]),
-                                            float(gb[3]), float(gb[4]), float(gb[5]),
-                                            float(gb[6])])
+                    # convert torch tensor to numpy
+                    pred_boxes_3d = np.asarray(pred.get('lidar_bboxes', []))  # (num_pred, 7)
+                    pred_labels   = np.asarray(pred.get('labels', []))
+                    pred_scores   = np.asarray(pred.get('scores', []))
+                    # Ensure numpy arrays for preds
+                    if torch.is_tensor(gt_boxes_3d):
+                        gt_boxes_3d = gt_boxes_3d.cpu().numpy()
+                    CsvWriteFramePredictions(csv_writer, frame_id, gt_boxes_3d, pred_boxes_3d, pred_labels, pred_scores)
 
-                    # write predicted rows with box_type = 'PRED'
-                    pred_num = boxes.shape[0] if boxes is not None else 0
-                    print(f"Amount of predictions in frame {frame_id}: {pred_num} ")
-                    for bidx in range(pred_num):
-                        bb = boxes[bidx]
-                        lbl = int(labels[bidx]) if labels.size else -1
-                        sc = float(scores[bidx]) if scores.size else 0.0
-                        csv_writer.writerow([frame_id, bidx, 'PRED',
-                                            float(bb[0]), float(bb[1]), float(bb[2]),
-                                            float(bb[3]), float(bb[4]), float(bb[5]),
-                                            float(bb[6]), lbl, sc])
+    '''
+    # 1) Keep only the highest-score prediction per frame
+    best_by_frame = {}  # frame_id -> prediction dict
+    for p in predictions:
+        fid = p["frame_id"]
+        if fid not in best_by_frame or p["score"] > best_by_frame[fid]["score"]:
+            best_by_frame[fid] = p
+
+    # 2) Replace predictions with the top-1 per frame
+    predictions = list(best_by_frame.values())
+    '''
+
+    # Sort predictions by score descending
+    predictions.sort(key=lambda p: -p["score"])
+
+    # -----------------------------------------------------------------------------
+    # 2) Compute IoU between predicted boxes and ground truth boxes and assign TP/FP
+    # -----------------------------------------------------------------------------
+    print("Calculating IoUs and TP/FP for each prediction...")
+
+    # Precision-Recall init arrays
+    N_pred = len(predictions)
+    print(f"Total predictions: {N_pred}")
+    TP_bev = np.zeros(N_pred, dtype=np.int32)
+    FP_bev = np.zeros(N_pred, dtype=np.int32)
+    TP_3d  = np.zeros(N_pred, dtype=np.int32)
+    FP_3d  = np.zeros(N_pred, dtype=np.int32)
+
+    #--- Errors ---
+    x_errors = 0.0
+    y_errors = 0.0
+    z_errors = 0.0
+
+    for i, pred in enumerate(tqdm(predictions)):
+        frame_id = pred['frame_id']
+        gts = gt_by_frame.get(frame_id, [])  # list of {"box": tensor(7,), "used": bool}
+        pred_box_3d_np = pred['box']  # (7,)
+
+        # If we have no GT boxes, all predictions are false positives
+        if len(gts) == 0:
+            FP_3d[i] = 1
+            FP_bev[i] = 1
+            continue
+
+        # Calculate errors for matched predictions and ground truths
+        x_errors += sum([abs(pred_box_3d_np[0] - g["box"][0].cpu().numpy()) for g in gts])
+        y_errors += sum([abs(pred_box_3d_np[1] - g["box"][1].cpu().numpy()) for g in gts])
+        z_errors += sum([abs(pred_box_3d_np[2] - g["box"][2].cpu().numpy()) for g in gts])
+
+        # ----------------- Birds eye view IoU -----------------
+        # Reduce dimensions of gt and pred [x, y, z, w, l, h, yaw]-> [x, y, w, l, yaw] for BEV IoU
+        # (As we do not care about z and height for BEV IoU)
+        gt_boxes_3d = torch.stack([g["box"] for g in gts]).float().cuda() # (num_gt, 7)
+        gt_bev = gt_boxes_3d[:, [0, 1, 3, 4, 6]]                          # (num_gt, 5)
+        
+        pred_box_3d = torch.from_numpy(pred_box_3d_np).float().cuda()   # (7,)
+        pred_box_3d_t = pred_box_3d.unsqueeze(0)                        # (1, 7)
+        pred_bev = pred_box_3d_t[:, [0, 1, 3, 4, 6]]                    # (1, 5)
+
+        # Calculate BEV IoU if we have gt and det boxes
+        iou_bev_v = iou_bev(gt_bev, pred_bev)   # shape (num_gt, num_pred) or (num_pred, num_gt) depending on your order
+        ious_flat = iou_bev_v.view(-1)     # (num_gt,) 1D vector with one IoU per GT box
+
+        # Index of best GT for this prediction
+        best_bev_idx = torch.argmax(ious_flat).item()     # integer
+        best_bev_iou = ious_flat[best_bev_idx].item()     # Python float
+
+        # Assign TP/FP based on IoU and whether GT box was already used
+        if best_bev_iou >= IoU_thresholds[0] and not gts[best_bev_idx]["used_bev"]:
+            TP_bev[i] = 1
+            # Mark this GT box as used
+            gts[best_bev_idx]["used_bev"] = True
+        else:
+            FP_bev[i] = 1
+
+        # --------------------- 3D IoU ---------------------
+        iou3d_v = iou3d(gt_boxes_3d, pred_box_3d_t) # (num_gt, 7), (1, 7) 
+        ious_flat_3d = iou3d_v.view(-1)     # (num_gt,)
+        ious['bbox_3d'].append(ious_flat_3d.cpu().numpy())
+
+        # index of best GT for this prediction
+        best_3d_idx = torch.argmax(ious_flat_3d).item()     # integer
+        best_3d_iou = ious_flat_3d[best_3d_idx].item()      # Python float
+
+        # Assign TP/FP based on IoU and whether GT box was already used
+        if best_3d_iou >= IoU_thresholds[0] and not gts[best_3d_idx]["used_3d"]:
+            TP_3d[i] = 1
+            # Mark this GT box as used
+            gts[best_3d_idx]["used_3d"] = True
+        else:
+            FP_3d[i] = 1
     
+    # Average error print
+    print(f"X error: {x_errors/N_pred}, Y error: {y_errors/N_pred}, Z error: {z_errors/N_pred}")
+
+    # -------------------------------------------------------------
+    # 3) Compute Precision-Recall curve and Average Precision (AP)
+    # ------------------------------------------------------------- 
+    print("Computing Precision-Recall curve and Average Precision (AP)...")
+    # Total number of ground truth boxes
+    N_gt = sum(len(v) for v in gt_by_frame.values())
+
+    # -- BEV AP --
+    len_TP = np.sum(TP_bev)
+    len_FP = np.sum(FP_bev)
+    print(f"Total GT boxes: {N_gt}, Total TP (BEV): {len_TP}, Total FP (BEV): {len_FP}")
+    
+    TP_cum = np.cumsum(TP_bev)
+    FP_cum = np.cumsum(FP_bev)
+    recall = TP_cum / N_gt
+    precision = TP_cum / (TP_cum + FP_cum)
+    # Ensure precision is non-increasing w.r.t recall (monotonic envelope)
+    for i in range(len(precision)-2, -1, -1):
+        precision[i] = max(precision[i], precision[i+1])
+
+    AP_bev = np.trapz(precision, recall)
+    print("BEV AP:", AP_bev)
+
+    # -- 3D AP --
+    len_TP = np.sum(TP_3d)
+    len_FP = np.sum(FP_3d)
+    print(f"Total GT boxes: {N_gt}, Total TP (3D): {len_TP}, Total FP (3D): {len_FP}")
+    
+    TP_cum = np.cumsum(TP_3d)
+    FP_cum = np.cumsum(FP_3d)
+    recall = TP_cum / N_gt
+    precision = TP_cum / (TP_cum + FP_cum)
+    # Ensure precision is non-increasing w.r.t recall (monotonic envelope)
+    for i in range(len(precision)-2, -1, -1):
+        precision[i] = max(precision[i], precision[i+1])
+
+    AP_3d = np.trapz(precision, recall)
+    print("3D AP:", AP_3d)
+
     if args.csv:
+        csv_writer.writerow(['BEV_AP', AP_bev])
+        #csv_writer.writerow(['3D_AP', AP_3d])
         csvfile.close()
-        print("Saving CSV to path: {saved_path}")
+        print(f"Saving predictions in CSV at path: {saved_path}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Configuration Parameters')
