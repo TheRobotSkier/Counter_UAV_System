@@ -73,7 +73,7 @@ class DroneSimNode(Node):
         self.dynamic_model = UAVDynamicModel()
         self.origin = np.array([0, 0, 0])
         self.despawn_distance = 0.5  # meters
-        self.respawn_delay = 5.0  # seconds
+        self.respawn_delay = 10.0  # seconds
         self.spawn_distance = 100.0  # meters
         
         # Initialize drone state
@@ -83,8 +83,10 @@ class DroneSimNode(Node):
 
     def spawn_drone(self):
         """Spawn drone at random location 100m from origin"""
-        # Generate random direction vector
-        direction = np.random.uniform(-1, 1, 3)
+        # Generate random direction vector that is not in the negative z direction
+        direction = np.random.normal(0, 1, 3) # Random vector in 3D space
+        while direction[2] < -0.1:  # Ensure not pointing too much downward
+            direction = np.random.normal(0, 1, 3)
         direction = direction / np.linalg.norm(direction)  # Normalize
         
         # Position at 100m distance
@@ -127,6 +129,7 @@ class DroneSimNode(Node):
             if self.check_despawn_condition(self.true_position):
                 self.drone_active = False
                 self.despawn_time = current_time
+                self.get_logger().info(f"Drone despawned at origin. Respawning in {self.respawn_delay} seconds...")
                 return
             
             # Publish active drone state
@@ -138,7 +141,13 @@ class DroneSimNode(Node):
                 self.true_position, self.true_velocity = self.spawn_drone()
                 self.drone_active = True
                 self.despawn_time = None
+                self.get_logger().info("Drone respawned at new location!")
                 self.publish_drone_state()
+            else:
+                # Simply don't publish anything - let other nodes handle the absence of data
+                remaining_time = self.respawn_delay - (current_time - self.despawn_time)
+                if remaining_time % 5 < 0.1:  # Log every ~5 seconds
+                    self.get_logger().info(f"Drone inactive. Respawning in {remaining_time:.1f} seconds...")
 
     def publish_drone_state(self):
         """Publish current drone state"""
