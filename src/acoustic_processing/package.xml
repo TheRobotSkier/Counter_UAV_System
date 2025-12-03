@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>acoustic_processing</name>
+  <version>0.0.1</version>
+  <description>Acoustic DOA and UAV audio processing node.</description>
+
+  <maintainer email="TheRobotSkier@users.noreply.github.com">ehb</maintainer>
+  <license>MIT</license>
+
+  <!-- Required for Python packages -->
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <build_depend>setuptools</build_depend>
+  <build_depend>rclpy</build_depend>
+  <build_export_depend>setuptools</build_export_depend>
+  <build_export_depend>rclpy</build_export_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>counter_uav_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
+  <exec_depend>python3-jack-client</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
