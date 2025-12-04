@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cuav_bringup</name>
+  <version>0.0.1</version>
+  <description>Launch files for bringing up the counter-UAV system.</description>
+
+  <maintainer email="121627019+TheRobotSkier@users.noreply.github.com">ehb</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+
+  <depend>cuav_acoustic</depend>
+  <depend>cuav_serial</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
