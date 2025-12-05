@@ -12,7 +12,7 @@ import numpy as np
 # ==============================================
 # Microphone Array Geometry
 # ==============================================
-D_M = 0.213#1.0          # Edge length of the tetrahedral array [meters]
+D_M = 0.213 #1.0          # Edge length of the tetrahedral array [meters]
 SPEED_OF_SOUND = 343.0  # Speed of sound in air [m/s]
 
 def regular_tetrahedron_array(d_m: float) -> np.ndarray:

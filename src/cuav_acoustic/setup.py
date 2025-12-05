@@ -22,6 +22,12 @@ setup(
         'console_scripts': [
             # ros2 run cuav_acoustic doa_node
             'doa_node = cuav_acoustic.doa_node:main',
+            # ros2 run cuav_acoustic doa_logging_node
+            'doa_logging_node = cuav_acoustic.doa_logging_node:main',
+            # ros2 run cuav_acoustic doa_offline_node
+            'doa_offline_node = cuav_acoustic.doa_offline_node:main',
+            # ros2 run cuav_acoustic doa_log_viewer
+            'doa_log_viewer = cuav_acoustic.doa_log_viewer:main',
         ],
     },
 )
