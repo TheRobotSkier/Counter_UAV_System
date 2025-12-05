@@ -177,7 +177,23 @@ class DOANode(Node):
         NUM_CHANNELS = config.NUM_CHANNELS
 
         # ---------------------- JACK Client Setup -----------------------
-        self.jack = jack.Client("doa_realtime")
+        # Try to connect to JACK server, if not running, log error and exit
+        try:
+            self.jack = jack.Client("doa_realtime")
+        except jack.JackOpenError:
+            self.get_logger().error(
+                "\n"
+                "=============================================================\n"
+                "  JACK server is NOT running — DOA node cannot start.\n"
+                "-------------------------------------------------------------\n"
+                "Start JACK manually, or run the provided start script:\n"
+                "    ./start_cuav_acoustic_system.sh\n"
+                "=============================================================\n"
+            )
+            # Stop node cleanly (no traceback)
+            rclpy.shutdown()
+            return
+        
         fs = self.jack.samplerate
 
         frame_len = int(round(config.FRAME_DUR_SEC * fs))

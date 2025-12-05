@@ -12,7 +12,11 @@ echo "--------------------------------------------------"
 echo "   COUNTER-UAV Acoustic System Launcher"
 echo "--------------------------------------------------"
 
-# 1. Start JACK if not running
+# Determine workspace directory (script is inside Counter_UAV_System/)
+WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$WS_DIR/install/setup.bash"
+
+# Check if jackd is running
 if pgrep -x "jackd" > /dev/null
 then
     echo "[INFO] JACK already running."
@@ -20,7 +24,7 @@ then
 else
     echo "[INFO] Starting JACK..."
     jackd -R -d alsa -d "$DEVICE" -r "$RATE" -p "$FRAMES" -n "$PERIODS" \
-        >/tmp/jack.log 2>&1 &
+        > /tmp/jack.log 2>&1 &
     sleep 3
 
     if pgrep -x "jackd" > /dev/null
@@ -33,15 +37,10 @@ else
     fi
 fi
 
-# 2. Source workspace
-WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
-source "$WS_DIR/install/setup.bash"
-
-# 3. Launch ROS2 system
 echo "[INFO] Launching ROS2 DOA + Serial..."
 ros2 launch cuav_bringup cuav_basic.launch.py
 
-# 4. Shutdown JACK if we started it
+# Stop JACK if we started it
 if [ "$JACK_STARTED" = true ]
 then
     echo "[INFO] Stopping JACK..."
