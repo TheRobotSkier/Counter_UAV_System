@@ -76,7 +76,7 @@ class ParticleFilter:
         
         return azimuth, elevation
         
-    def predict(self, dt=0.1):
+    def predict(self, dt=0.5):
         """Optimized particle movement prediction"""
         if self.particles is None:
             self.initialize_particles()
@@ -116,7 +116,7 @@ class ParticleFilter:
         self.normalize_weights()
         self.check_resampling_need()
 
-    def update_with_pp(self, pp_position, position_std=2.0):
+    def update_with_pp(self, pp_position, position_std=0.5):
         """Optimized PointPillars weight update - VECTORIZED"""
         position_errors = np.linalg.norm(self.particles - pp_position, axis=1)
         position_likelihood = np.exp(-0.5 * (position_errors / position_std) ** 2)
@@ -138,16 +138,16 @@ class ParticleFilter:
 
     def check_resampling_need(self):
         """Check if resampling is needed based on effective sample size"""
-        effective_sample_size = 1.0 / np.sum(self.weights ** 2)
-        self.needs_resampling = effective_sample_size < self.num_particles / 2
+        effective_sample_size = 1.0 / np.sum(self.weights ** 2) # Calculate ESS
+        self.needs_resampling = effective_sample_size < self.num_particles / 2 # Threshold
 
     def angle_difference_vectorized(self, angles1, angles2):
-        """Vectorized version of angle difference calculation"""
+        """Vectorized angle difference calculation"""
         diff = angles1 - angles2
         return np.arctan2(np.sin(diff), np.cos(diff))
 
     def resample(self):
-        """Optimized systematic resampling"""
+        """Resampling"""
         if not self.needs_resampling:
             return
             

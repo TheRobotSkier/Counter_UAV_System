@@ -11,12 +11,12 @@ import time
 class UAVDynamicModel:
     """Simple dynamic model for DJI Mavic-like UAV"""
     def __init__(self):
-        self.max_speed = 500.0
-        self.max_acceleration = 100.0
-        self.max_vertical_speed = 200.0
-        self.max_vertical_acceleration = 50.0
-        self.velocity_decay = 1
-        self.position_noise_std = 0.1
+        self.max_speed = 500.0 
+        self.max_acceleration = 100.0 
+        self.max_vertical_speed = 200.0 
+        self.max_vertical_acceleration = 50.0 
+        self.velocity_decay = 1 # No decay for simplicity
+        self.position_noise_std = 0.0 # meters
 
     def constrain_velocity(self, velocity):
         horizontal_speed = np.linalg.norm(velocity[:2])
