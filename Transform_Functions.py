@@ -1,36 +1,99 @@
 import math
 import numpy as np
+from src.cuav_acoustic.cuav_acoustic.config import regular_tetrahedron_array
 
 #Everything is in mm
+
+# True = print transforms, False = no prints
+PRINT=True
+
 #The first transform is used to locate the center of the Aqoustic array foot
 
-#World = [0, 0, 0] #GNNSRTK
-GNNSRTK = [0, 0, 0] #aka World
+BASE = np.array([0, 0, 0]) #aka Base station frame
 
-#All of the transforms are to and from the X,Y-center of the objects unless otherwise stated
-World_To_Aquostic_Array_Foot_Bottum = [-190.5, 0, 0]
-Aquostic_Array_Foot_Top = [-190.5, 0, 100]
+#All of the transforms/translations are to and from the X,Y-center of the objects unless otherwise stated
+BASE_2_ARRAY_FOOT_B = np.array([-190.5, 0, 0]) # From the base station frame to the center of the aquostic array foot bottom
 
-World_To_Aquostic_Array_Base_Small_Center = [-190.5, 0, 110] #Use for Small base
-World_To_Aquostic_Array_Base_Big_Center = [-190.5, 0, 130] #use for Big base
+ARRAY_FOOT_B_2_ARRAY_FOOT_T = np.array([0, 0, 100]) #From the bottom center of the aquostic array foot to the top center of the foot
 
+ARRAY_FOOT_T_2_ARRAY_BASE_S_C = np.array([0, 0, 10]) #From the top center of the aquostic array foot to the small array base center
+ARRAY_FOOT_T_2_ARRAY_BASE_L_C = np.array([0, 0, 30]) #From the top center of the aquostic array foot to the large array base center
+
+ARRAY_BASE_S_C_2_ARRAY_BASE_S_TOP = np.array([0, 0, 20]) #From small array base center to top of small array base
+ARRAY_BASE_L_C_2_ARRAY_BASE_L_TOP = np.array([0, 0, 30]) #From large array base center to top of large array base
+
+MIC_LENGTH_TOTAL = 192 #The total length of the micophones
+MIC_BUTTOM = 10 # The buttom part of the micophone that is with in the conector
+MIC_LENGTH = MIC_LENGTH_TOTAL - MIC_BUTTOM #The length the sensor of the micophone ir raised above the conector
+
+# From the base of the array to the origin of the mic positions (the center of the tetrahedron)
+ARRAY_BASE_2_ARRAY_MIC_ORIGIN = np.array([0,0,MIC_LENGTH]) #From the base of the array to the origin of the mic positions (the center of the tetrahedron)
+
+# Full translation from BASE to each mic array base center:
+BASE_2_ARRAY_L_MIC_CENTER = BASE_2_ARRAY_FOOT_B + ARRAY_FOOT_B_2_ARRAY_FOOT_T + ARRAY_FOOT_T_2_ARRAY_BASE_L_C
+BASE_2_ARRAY_S_MIC_CENTER = BASE_2_ARRAY_FOOT_B + ARRAY_FOOT_B_2_ARRAY_FOOT_T + ARRAY_FOOT_T_2_ARRAY_BASE_S_C
+
+# Full translation from BASE to each mic array base top:
+BASE_2_ARRAY_L_MIC_TOP = BASE_2_ARRAY_L_MIC_CENTER + ARRAY_BASE_L_C_2_ARRAY_BASE_L_TOP
+BASE_2_ARRAY_S_MIC_TOP = BASE_2_ARRAY_S_MIC_CENTER + ARRAY_BASE_S_C_2_ARRAY_BASE_S_TOP
+
+# Full translation from BASE to each mic array origin:
+BASE_2_ARRAY_L_MIC_ORIGIN = BASE_2_ARRAY_L_MIC_CENTER + ARRAY_BASE_2_ARRAY_MIC_ORIGIN
+BASE_2_ARRAY_S_MIC_ORIGIN = BASE_2_ARRAY_S_MIC_CENTER + ARRAY_BASE_2_ARRAY_MIC_ORIGIN
+
+
+DM_S = 213 #Distance between mics for small array, it t is 213.018 from all 3 in plane mics to the top. all the 3 in the same plane have 213.042 between them... that is an error on my part of 0.024 mm
+DM_L = 1000 #Distance between mics for large array
+
+# Mic positions for normal tetrahedron array:
+MIC_POSITIONS_NORMAL = regular_tetrahedron_array(DM_L)
+
+# the array is mounted 180 degrees rotated around z axis compared to the BASE frame
+R_Z_180 = np.array([
+    [-1, 0, 0],
+    [ 0,-1, 0],
+    [ 0, 0, 1]
+])
+
+BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS = R_Z_180 @ MIC_POSITIONS_NORMAL.T #Rotation to match the real mic positions
+print("BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS for large array:", BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS.T)
+
+# Dimensions for the RTK transform calibration
+GPS_TRANSFORM_PLATE_PRINT= 10 #Thickness of the 3D printed plate that holds the GPS receiver for RTK transform calibration
+METAL_GROUND_PLATE=1 #Thickness of the metal plate that is in between the GPS receiver and the 3D printed plate
+GPS_TRANSFORM_PLATE = GPS_TRANSFORM_PLATE_PRINT + METAL_GROUND_PLATE #Total thickness from base station to GPS receiver
+ARRAY_BASE_L_TOP_2_GPS = np.array([0,0,GPS_TRANSFORM_PLATE]) #From mic_base to GPS receiver
+
+BASE_2_GPS_MIC_1=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[0]
+BASE_2_GPS_MIC_2=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[1]
+BASE_2_GPS_MIC_3=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[2]
+BASE_2_GPS_MIC_4=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[3]
+
+BASE_2_Aquostic_Array_Base_Small_Center = [-190.5, 0, 110] #Use for Small base
+BASE_2_Aquostic_Array_Base_Large_Center = [-190.5, 0, 130] #use for large base
 #Distances between mics for each array size
 D_M_Small = 213 #It is 213.018 from all 3 in plane mics to the top. all the 3 in the same plane have 213.042 between them... that is an error on my part of 0.024mm
-D_M_Big = 1000 #1 meter, says Emil
+D_M_Large = 1000 #1 meter, says Emil
 
 #Transfroms for the pan/tiltsystem
-PanTilt_Bottum = [758.651, 0.341, 0] #The bottom center of the pantilt system sadly has a y ofset of 0.341mm, womp womp, but that is probably going to be fine....
+BASE_2_PAN_TILT_B = [758.651, 0.341, 0] # From the base station frame to the bottom center of the pantilt system
+#The bottom center of the pantilt system sadly has a y ofset of 0.341mm, womp womp, but that is probably going to be fine....
 
 #Dimensions of the pan tilt system parts
-Wood_Width = 10 #Thickness of the wood ie form thp to bottum of wood
-Wood_Top_To_Alu_Bottum = 150
-Alu_Plate_Width = 10 #Thickness of the alu plate ie form thp to bottum of aliu plate
-Top_Of_Alu_To_Center_Of_Tilt_Joint = 65
+WOOD_WIDTH = 10 #Thickness of the wood ie form thp to np.array([-190.5, 0, 130]) bottum of wood
+WOOD_TOP_2_ALU_BOTTUM = 150
+ALU_PLATE_WIDTH = 10 #Thickness of the alu plate ie form thp to bottum of aliu plate
+TOP_OF_ALU_2_CENTER_OF_TILT_JOINT = 65
+
+
+
 #Dimensions are combined to make come more eledgeble
-Bottum_Of_PanTilt_To_LIdar_Frame = Wood_Width + Wood_Top_To_Alu_Bottum + Alu_Plate_Width + Top_Of_Alu_To_Center_Of_Tilt_Joint
+Bottum_Of_PanTilt_To_LIdar_Frame = WOOD_WIDTH + WOOD_TOP_2_ALU_BOTTUM + ALU_PLATE_WIDTH + TOP_OF_ALU_2_CENTER_OF_TILT_JOINT
 
 World_To_P = [758.651, 0.341] # is the height from ground to the Tilt joint where the rest of the transform depends on the pan and tilt angles
 Center_Of_Tilt_Joint_To_LIdar_Frame = 73 #Used to calculate transform to the lidar frame but this part of the transfor depends on the azimuth and elevation angles
+
+
 
 ###Ant functions for computing the pan/tilt angles with parallax correction
 def point_callback(self, msg):
@@ -90,23 +153,23 @@ LIDAR_OFFSET = 0.073
 World_To_LIdar_Frame = [758.651, 0.341, 298] #298mm is the height from ground to lidar frame center
 print("Transform_Functions.py loaded")
 print("World_To_LIdar_Frame:", World_To_LIdar_Frame)
-print("World_To_Aquostic_Array_Base_Small_Center:", World_To_Aquostic_Array_Base_Small_Center, "World_To_Aquostic_Array_Base_Big_Center:", World_To_Aquostic_Array_Base_Big_Center)
+print("BASE_To_Aquostic_Array_Base_Small_Center:", BASE_2_Aquostic_Array_Base_Small_Center, "BASE_To_Aquostic_Array_Base_Big_Center:", BASE_2_Aquostic_Array_Base_Large_Center)
 
-T_World_Small_Array = [
+T_BASE_Small_Array = [
     [1, 0, 0, -190.5],
     [0, 1, 0, 0],
     [0, 0, 1, 110],
     [0, 0, 0, 1]
 ]
 
-T_World_Big_Array = [
+T_BASE_Big_Array = [
     [1, 0, 0, -190.5],
     [0, 1, 0, 0],
     [0, 0, 1, 130],
     [0, 0, 0, 1]
 ]
 
-T_World_Pantilt_Base = [
+T_BASE_Pantilt_Base = [
     [1, 0, 0, 758.651],
     [0, 1, 0, 0.341],
     [0, 0, 1, 0],
@@ -114,7 +177,7 @@ T_World_Pantilt_Base = [
 ]
 
 ##
-T_World_Lidar = [
+T_BASE_Lidar = [
     [1, 0, 0, 758.651],
     [0, 1, 0, 0.341],
     [0, 0, 1, 298],
@@ -122,7 +185,6 @@ T_World_Lidar = [
 ]
 ##Use np.linalg.inv() to find inverse transforms:
 # To transform from small array frame to world frame:
-T_Small_Array_World = np.linalg.inv(T_World_Small_Array)
+T_Small_Array_BASE = np.linalg.inv(T_BASE_Small_Array)
 ##
-print(T_Small_Array_World)
-##this is a change
+print(T_Small_Array_BASE)
