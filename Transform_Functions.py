@@ -90,3 +90,36 @@ World_To_LIdar_Frame = [758.651, 0.341, 298] #298mm is the height from ground to
 print("Transform_Functions.py loaded")
 print("World_To_LIdar_Frame:", World_To_LIdar_Frame)
 print("World_To_Aquostic_Array_Base_Small_Center:", World_To_Aquostic_Array_Base_Small_Center, "World_To_Aquostic_Array_Base_Big_Center:", World_To_Aquostic_Array_Base_Big_Center)
+
+T_World_Small_Array = [
+    [1, 0, 0, -190.5],
+    [0, 1, 0, 0],
+    [0, 0, 1, 110],
+    [0, 0, 0, 1]
+]
+
+T_World_Big_Array = [
+    [1, 0, 0, -190.5],
+    [0, 1, 0, 0],
+    [0, 0, 1, 130],
+    [0, 0, 0, 1]
+]
+
+T_World_Pantilt_Base = [
+    [1, 0, 0, 758.651],
+    [0, 1, 0, 0.341],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1]
+]
+
+##
+T_World_Lidar = [
+    [1, 0, 0, 758.651],
+    [0, 1, 0, 0.341],
+    [0, 0, 1, 298],
+    [0, 0, 0, 1]
+]
+##Use np.linalg.inv() to find inverse transforms:
+# To transform from small array frame to world frame:
+T_Small_Array_World = np.linalg.inv(T_World_Small_Array)
+##
