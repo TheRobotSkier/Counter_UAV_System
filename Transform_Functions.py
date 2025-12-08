@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 #Everything is in mm
 #The first transform is used to locate the center of the Aqoustic array foot
@@ -123,3 +124,4 @@ T_World_Lidar = [
 # To transform from small array frame to world frame:
 T_Small_Array_World = np.linalg.inv(T_World_Small_Array)
 ##
+print(T_Small_Array_World)
