@@ -11,13 +11,15 @@ PRINT=True
 
 BASE = np.array([0, 0, 0]) #aka Base station frame
 
+#------ Acoustics Array Transforms and Dimensions ------#
+
 #All of the transforms/translations are to and from the X,Y-center of the objects unless otherwise stated
-BASE_2_ARRAY_FOOT_B = np.array([-190.5, 0, 0]) # From the base station frame to the center of the aquostic array foot bottom
+BASE_2_ARRAY_FOOT_B = np.array([-190.5, 0, 0]) # From the base station frame to the center of the acoustic array foot bottom
 
-ARRAY_FOOT_B_2_ARRAY_FOOT_T = np.array([0, 0, 100]) #From the bottom center of the aquostic array foot to the top center of the foot
+ARRAY_FOOT_B_2_ARRAY_FOOT_T = np.array([0, 0, 100]) #From the bottom center of the acoustic array foot to the top center of the foot
 
-ARRAY_FOOT_T_2_ARRAY_BASE_S_C = np.array([0, 0, 10]) #From the top center of the aquostic array foot to the small array base center
-ARRAY_FOOT_T_2_ARRAY_BASE_L_C = np.array([0, 0, 30]) #From the top center of the aquostic array foot to the large array base center
+ARRAY_FOOT_T_2_ARRAY_BASE_S_C = np.array([0, 0, 10]) #From the top center of the acoustic array foot to the small array base center
+ARRAY_FOOT_T_2_ARRAY_BASE_L_C = np.array([0, 0, 30]) #From the top center of the acoustic array foot to the large array base center
 
 ARRAY_BASE_S_C_2_ARRAY_BASE_S_TOP = np.array([0, 0, 20]) #From small array base center to top of small array base
 ARRAY_BASE_L_C_2_ARRAY_BASE_L_TOP = np.array([0, 0, 30]) #From large array base center to top of large array base
@@ -69,12 +71,8 @@ BASE_2_GPS_MIC_2=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIO
 BASE_2_GPS_MIC_3=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[2]
 BASE_2_GPS_MIC_4=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[3]
 
-BASE_2_Aquostic_Array_Base_Small_Center = [-190.5, 0, 110] #Use for Small base
-BASE_2_Aquostic_Array_Base_Large_Center = [-190.5, 0, 130] #use for large base
-#Distances between mics for each array size
-D_M_Small = 213 #It is 213.018 from all 3 in plane mics to the top. all the 3 in the same plane have 213.042 between them... that is an error on my part of 0.024mm
-D_M_Large = 1000 #1 meter, says Emil
 
+#------ Pan/Tilt System Transforms and Dimensions ------#
 #Transfroms for the pan/tiltsystem
 BASE_2_PAN_TILT_B = [758.651, 0.341, 0] # From the base station frame to the bottom center of the pantilt system
 #The bottom center of the pantilt system sadly has a y ofset of 0.341mm, womp womp, but that is probably going to be fine....
@@ -149,25 +147,68 @@ TILT_AXIS_Z = HEIGHT_BASE_TO_PAN + HEIGHT_PAN_TO_TILT
 LIDAR_OFFSET = 0.073
 ###Ant
 
-#Full world to LIdar and aquostic array transforms
-World_To_LIdar_Frame = [758.651, 0.341, 298] #298mm is the height from ground to lidar frame center
+#Full world to LIdar and acoustic array transforms
+BASE_2_LIDAR = [758.651, 0.341, 298] #298mm is the height from ground to lidar frame center
 print("Transform_Functions.py loaded")
-print("World_To_LIdar_Frame:", World_To_LIdar_Frame)
-print("BASE_To_Aquostic_Array_Base_Small_Center:", BASE_2_Aquostic_Array_Base_Small_Center, "BASE_To_Aquostic_Array_Base_Big_Center:", BASE_2_Aquostic_Array_Base_Large_Center)
+print("BASE_2_LIDAR:", BASE_2_LIDAR)
 
-T_BASE_Small_Array = [
-    [1, 0, 0, -190.5],
-    [0, 1, 0, 0],
-    [0, 0, 1, 110],
-    [0, 0, 0, 1]
-]
+# ------ Transformatic matrix ------#
 
-T_BASE_Big_Array = [
-    [1, 0, 0, -190.5],
-    [0, 1, 0, 0],
-    [0, 0, 1, 130],
+T_BASE_2_ARRAY_S_MIC_CENTER = np.array([
+    [1, 0, 0, BASE_2_ARRAY_S_MIC_CENTER[0]],
+    [0, 1, 0, BASE_2_ARRAY_S_MIC_CENTER[1]],
+    [0, 0, 1, BASE_2_ARRAY_S_MIC_CENTER[2]],
     [0, 0, 0, 1]
-]
+])
+
+T_BASE_2_ARRAY_L_MIC_CENTER = np.array([
+    [1, 0, 0, BASE_2_ARRAY_L_MIC_CENTER[0]],
+    [0, 1, 0, BASE_2_ARRAY_L_MIC_CENTER[1]],
+    [0, 0, 1, BASE_2_ARRAY_L_MIC_CENTER[2]],
+    [0, 0, 0, 1]
+])
+
+T_BASE_2_ARRAY_S_MIC_ORIGIN = np.array([
+    [1, 0, 0, BASE_2_ARRAY_S_MIC_ORIGIN[0]],
+    [0, 1, 0, BASE_2_ARRAY_S_MIC_ORIGIN[1]],
+    [0, 0, 1, BASE_2_ARRAY_S_MIC_ORIGIN[2]],
+    [0, 0, 0, 1]
+])
+
+T_BASE_2_ARRAY_L_MIC_ORIGIN = np.array([
+    [1, 0, 0, BASE_2_ARRAY_L_MIC_ORIGIN[0]],
+    [0, 1, 0, BASE_2_ARRAY_L_MIC_ORIGIN[1]],
+    [0, 0, 1, BASE_2_ARRAY_L_MIC_ORIGIN[2]],
+    [0, 0, 0, 1]
+])
+
+T_BASE_2_GPS_MIC_1 = np.array([
+    [1, 0, 0, BASE_2_GPS_MIC_1[0]],
+    [0, 1, 0, BASE_2_GPS_MIC_1[1]],
+    [0, 0, 1, BASE_2_GPS_MIC_1[2]],
+    [0, 0, 0, 1]
+])
+
+T_BASE_2_GPS_MIC_2 = np.array([
+    [1, 0, 0, BASE_2_GPS_MIC_2[0]],
+    [0, 1, 0, BASE_2_GPS_MIC_2[1]],
+    [0, 0, 1, BASE_2_GPS_MIC_2[2]],
+    [0, 0, 0, 1]
+])
+
+T_BASE_2_GPS_MIC_3 = np.array([
+    [1, 0, 0, BASE_2_GPS_MIC_3[0]],
+    [0, 1, 0, BASE_2_GPS_MIC_3[1]],
+    [0, 0, 1, BASE_2_GPS_MIC_3[2]],
+    [0, 0, 0, 1]
+])
+
+T_BASE_2_GPS_MIC_4 = np.array([
+    [1, 0, 0, BASE_2_GPS_MIC_4[0]],
+    [0, 1, 0, BASE_2_GPS_MIC_4[1]],
+    [0, 0, 1, BASE_2_GPS_MIC_4[2]],
+    [0, 0, 0, 1]
+])
 
 T_BASE_Pantilt_Base = [
     [1, 0, 0, 758.651],
@@ -185,6 +226,6 @@ T_BASE_Lidar = [
 ]
 ##Use np.linalg.inv() to find inverse transforms:
 # To transform from small array frame to world frame:
-T_Small_Array_BASE = np.linalg.inv(T_BASE_Small_Array)
+T_ARRAY_L_MIC_CENTER_2_BASE = np.linalg.inv(T_BASE_2_ARRAY_L_MIC_CENTER)
 ##
-print(T_Small_Array_BASE)
+print(T_ARRAY_L_MIC_CENTER_2_BASE)
