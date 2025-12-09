@@ -96,17 +96,17 @@ class ParticleFilter:
         
         self.particles[:, 2] = np.maximum(self.particles[:, 2], 0.1)
             
-    def update_with_doa(self, doa_data, doa_std_rad=0.1):
+    def update_with_doa(self, doa_data, doa_std_rad=0.1): #std is in radians aka 0.1 rad = 5.72957795 degrees
         """Optimized DOA weight update - VECTORIZED"""
         doa_azimuth = np.deg2rad(doa_data[0])
         doa_elevation = np.deg2rad(doa_data[1])
         
-        pred_azimuth, pred_elevation = self.cartesian_to_angles(self.particles)
+        pred_azimuth, pred_elevation = self.cartesian_to_angles(self.particles) # The predictions are than made into radians instead of degrees
         
         azimuth_error = self.angle_difference_vectorized(pred_azimuth, doa_azimuth)
         elevation_error = self.angle_difference_vectorized(pred_elevation, doa_elevation)
-        
-        azimuth_likelihood = np.exp(-0.5 * (azimuth_error / doa_std_rad) ** 2)
+        #Here the uncertanty is applied and to both azimuth and elevation This is done by calculating the likelihood of each particle given the measurement and the standard deviation
+        azimuth_likelihood = np.exp(-0.5 * (azimuth_error / doa_std_rad) ** 2) 
         elevation_likelihood = np.exp(-0.5 * (elevation_error / doa_std_rad) ** 2)
         
         angular_likelihood = azimuth_likelihood * elevation_likelihood
