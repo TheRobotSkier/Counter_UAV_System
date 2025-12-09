@@ -118,10 +118,10 @@ The node subscribes to a 3D point topic. The system will calculate the angles re
 - **Message Type:** `geometry_msgs/msg/Point`
 - **Frame:** Relative to the turret base (0,0,0).
 
-**Example Command (Aim 5m forward, 2m left, 3m up):**
+**Example Command (Aim 5m forward, 2m left, 4m up):**
 
 ```bash
-ros2 topic pub --once /cmd_point geometry_msgs/msg/Point "{x: 5.0, y: 2.0, z: 3.0}"
+ros2 topic pub --once /cmd_point geometry_msgs/msg/Point "{x: 5.0, y: 2.0, z: 4.0}"
 ```
 
 ### 3. Visualization Features
