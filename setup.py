@@ -33,6 +33,10 @@ setup(
         'console_scripts': [
             # This makes your driver_node.py an executable
             'driver_node = pan_tilt_control.driver_node:main',
+<<<<<<< HEAD
+=======
+            'calibrate_offsets = pan_tilt_control.calibrate_offsets:main',
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
         ],
     },
 )

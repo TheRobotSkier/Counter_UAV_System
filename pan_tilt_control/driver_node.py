@@ -10,10 +10,18 @@ import time
 import math
 
 # --- PHYSICAL GEOMETRY (Meters) ---
+<<<<<<< HEAD
 HEIGHT_BASE_TO_PAN = 0.145
 HEIGHT_PAN_TO_TILT = 0.075
 TILT_AXIS_Z = HEIGHT_BASE_TO_PAN + HEIGHT_PAN_TO_TILT # 0.22m
 LIDAR_OFFSET = 0.043 # 43mm arm length
+=======
+# Distances -> wood: 10mm, wood_to_bottom: 150mm , metal_ceiling_width: 10mm, metal_to_tilt_joint: 65mm, tilt_joint_to_lidar: 73mm
+HEIGHT_BASE_TO_PAN = 0.16
+HEIGHT_PAN_TO_TILT = 0.075
+TILT_AXIS_Z = HEIGHT_BASE_TO_PAN + HEIGHT_PAN_TO_TILT
+LIDAR_OFFSET = 0.073
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
 
 # --- DYNAMIXEL CONFIGURATION ---
 STEPS_PER_RAD = 4096.0 / (2.0 * math.pi)
@@ -21,8 +29,13 @@ STEPS_PER_RAD = 4096.0 / (2.0 * math.pi)
 # --- USER LIMITS ---
 PAN_MIN_DXL = 0
 PAN_MAX_DXL = 4095
+<<<<<<< HEAD
 TILT_MIN_DXL = 0
 TILT_MAX_DXL = 2048
+=======
+TILT_MIN_DXL = 170 # 15 degrees
+TILT_MAX_DXL = 1536 # 135 degrees
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
 
 def rad_to_dxl_pan(rad):
     center = 2048
@@ -44,12 +57,27 @@ class PanTiltDriverNode(Node):
     def __init__(self):
         super().__init__('pan_tilt_driver_node')
 
+<<<<<<< HEAD
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('baud_rate', 57600)
         
         serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
         baud_rate = self.get_parameter('baud_rate').get_parameter_value().integer_value
         
+=======
+        # --- PARAMETERS ---
+        self.declare_parameter('pan_offset_rad', 0.0)
+        self.declare_parameter('tilt_offset_rad', 0.0)
+        self.declare_parameter('serial_port', '/dev/ttyUSB0')
+        self.declare_parameter('baud_rate', 57600)
+
+        # Load values
+        self.pan_offset = self.get_parameter('pan_offset_rad').value
+        self.tilt_offset = self.get_parameter('tilt_offset_rad').value
+        serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
+        baud_rate = self.get_parameter('baud_rate').get_parameter_value().integer_value
+
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
         try:
             self.serial_conn = serial.Serial(serial_port, baud_rate, timeout=1.0)
             self.serial_conn.reset_input_buffer()
@@ -74,10 +102,17 @@ class PanTiltDriverNode(Node):
         self.joint_state_msg.position = [0.0, 0.0]
 
     def point_callback(self, msg):
+<<<<<<< HEAD
+=======
+        """
+        Calculates Pan/Tilt to aim at 3D point (x, y, z) with Parallax Correction.
+        """
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
         x = msg.x
         y = msg.y
         z = msg.z 
 
+<<<<<<< HEAD
         # 1. Calculate LOOK Angles (Gaze Direction)
         pan_rad = math.atan2(y, x)
         
@@ -90,6 +125,33 @@ class PanTiltDriverNode(Node):
         self.send_serial_command('T', tilt_rad)
 
         # 3. Visualize
+=======
+        # 1. PAN (Azimuth)
+        pan_rad = math.atan2(y, x)
+
+        # 2. TILT (Elevation)
+        # First, calculate the "ideal" angle from the shoulder to the target
+        z_relative = z - TILT_AXIS_Z
+        xy_distance = math.sqrt(x*x + y*y)
+        distance_3d = math.sqrt(z_relative**2 + xy_distance**2) # Hypotenuse D
+        
+        # Base elevation angle (Center of motor -> Target)
+        base_tilt = math.atan2(z_relative, xy_distance)
+        
+        # 3. PARALLAX CORRECTION
+        if distance_3d > LIDAR_OFFSET:
+            correction_angle = math.asin(LIDAR_OFFSET / distance_3d)
+            tilt_rad = base_tilt - correction_angle
+        else:
+            self.get_logger().warn("Target too close for parallax correction!")
+            tilt_rad = base_tilt
+
+        # 4. Send Commands
+        self.send_serial_command('P', pan_rad)
+        self.send_serial_command('T', tilt_rad)
+
+        # 5. Visualize
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
         self.publish_aiming_marker(pan_rad, tilt_rad, x, y, z)
 
     def pan_goal_callback(self, msg):
@@ -102,11 +164,22 @@ class PanTiltDriverNode(Node):
         if not self.serial_conn: return
         try:
             if axis == 'P': 
+<<<<<<< HEAD
                 goal_dxl = rad_to_dxl_pan(rad)
                 goal_dxl = max(PAN_MIN_DXL, min(PAN_MAX_DXL, goal_dxl))
                 self.serial_conn.write(f"P{goal_dxl}\n".encode('utf-8'))
             elif axis == 'T': 
                 goal_dxl = rad_to_dxl_tilt(rad)
+=======
+                corrected_rad = rad - self.pan_offset
+                goal_dxl = rad_to_dxl_pan(corrected_rad)
+                goal_dxl = max(PAN_MIN_DXL, min(PAN_MAX_DXL, goal_dxl))
+                self.serial_conn.write(f"P{goal_dxl}\n".encode('utf-8'))
+
+            elif axis == 'T': 
+                corrected_rad = rad - self.tilt_offset
+                goal_dxl = rad_to_dxl_tilt(corrected_rad)
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
                 goal_dxl = max(TILT_MIN_DXL, min(TILT_MAX_DXL, goal_dxl))
                 self.serial_conn.write(f"T{goal_dxl}\n".encode('utf-8'))
         except Exception: pass
@@ -123,6 +196,7 @@ class PanTiltDriverNode(Node):
         marker.color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0) 
 
         # --- CALCULATE START POINT (The Lidar Lens) ---
+<<<<<<< HEAD
         # The Arm is always 90 degrees offset from the Gaze direction.
         # If Gaze is 0 (Horizon), Arm is +90 (Vertical Up).
         # We calculate the position of the Arm Tip based on this.
@@ -134,6 +208,10 @@ class PanTiltDriverNode(Node):
         # Z = Center + L * sin(arm_tilt)
         # XY_Proj = L * cos(arm_tilt)
         
+=======
+        arm_tilt = tilt_gaze + (math.pi / 2.0)
+        
+>>>>>>> 13beb8fa (Updated link sizes and changed to xacro)
         p_start = Point()
         p_start.z = TILT_AXIS_Z + LIDAR_OFFSET * math.sin(arm_tilt)
         
