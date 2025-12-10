@@ -138,10 +138,10 @@ class DroneSimNode(Node):
         super().__init__('drone_sim_node')
         
         # Parameters that can be easily modified
-        self.declare_parameter('update_rate', 10.0)
-        self.declare_parameter('despawn_distance', 0.5)
-        self.declare_parameter('respawn_delay', 10.0)
-        self.declare_parameter('spawn_distance', 100.0)
+        self.declare_parameter('update_rate', 10.0) # Hz
+        self.declare_parameter('despawn_distance', 0.5) # meters
+        self.declare_parameter('respawn_delay', 10.0) # seconds
+        self.declare_parameter('spawn_distance', 100.0) # meters
         self.declare_parameter('log_level', 1)  # 0=debug, 1=info, 2=warn
         
         # Get parameters
@@ -161,8 +161,8 @@ class DroneSimNode(Node):
         self.header_pub = self.create_publisher(Header, '/drone/header', 10)
         
         # Timer for simulation updates
-        self.timer_period = 1.0 / self.update_rate
-        self.timer = self.create_timer(self.timer_period, self.update_simulation)
+        self.timer_period = 1.0 / self.update_rate # seconds
+        self.timer = self.create_timer(self.timer_period, self.update_simulation) # Timer callback
         
         # Drone state variables
         self.dynamic_model = UAVDynamicModel()
@@ -177,9 +177,9 @@ class DroneSimNode(Node):
 
     def spawn_drone(self):
         """Spawn drone at random location from origin"""
-        # Generate random direction vector
+        # Generate random direction vector that is not pointing too much downward
         direction = np.random.normal(0, 1, 3)
-        while direction[2] < -0.1:  # Ensure not pointing too much downward
+        while direction[2] < -0.1:  # Avoid too much downward direction
             direction = np.random.normal(0, 1, 3)
         direction = direction / np.linalg.norm(direction)
         
