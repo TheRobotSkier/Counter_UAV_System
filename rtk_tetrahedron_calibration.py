@@ -275,3 +275,75 @@ T[:3, 3] = t
 
 print("\nFinal 4×4 transform (Local → ENU):\n", T)
 print("\nDone.")
+
+
+# --------------------------------------------------------------------
+# EXTRA STEP — PLOT MEASUREMENT SPREAD IN LOCAL FRAME
+# --------------------------------------------------------------------
+
+def enu_to_local(p_enu):
+    """Apply inverse transform: local = R^T * (enu - t)."""
+    return R.T @ (p_enu - t)
+
+fig = plt.figure(figsize=(12,6))
+ax = fig.add_subplot(111, projection="3d")
+
+colors = ["r", "g", "b", "k"]
+
+for (name, pts_enu), color in zip(corner_data.items(), colors):
+    pts_local = np.array([enu_to_local(p) for p in pts_enu])
+    ax.scatter(pts_local[:,0], pts_local[:,1], pts_local[:,2],
+               s=4, label=name, color=color)
+
+# Plot theoretical tetrahedron geometry
+ax.scatter(P_LOCAL[:,0], P_LOCAL[:,1], P_LOCAL[:,2],
+           color="cyan", s=80, label="Theoretical Positions", marker="^")
+
+ax.set_title("RTK Measurement Spread in LOCAL Frame")
+ax.set_xlabel("Local X [m]")
+ax.set_ylabel("Local Y [m]")
+ax.set_zlabel("Local Z [m]")
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+# --------------------------------------------------------------------
+# EXTRA STEP — PLOT MEASUREMENT SPREAD IN LOCAL FRAME (WITH MATCHING COLORS)
+# --------------------------------------------------------------------
+
+def enu_to_local(p_enu):
+    """Apply inverse transform: local = R^T * (enu - t)."""
+    return R.T @ (p_enu - t)
+
+fig = plt.figure(figsize=(12,6))
+ax = fig.add_subplot(111, projection="3d")
+
+corner_names = ["corner1", "corner2", "corner3", "corner4"]
+colors = ["r", "g", "b", "k"]
+
+for i, (corner, color) in enumerate(zip(corner_names, colors)):
+    # Transform all ENU samples to local frame
+    pts_enu = corner_data[corner]
+    pts_local = np.array([enu_to_local(p) for p in pts_enu])
+    
+    # Plot measured points
+    ax.scatter(
+        pts_local[:,0], pts_local[:,1], pts_local[:,2],
+        s=6, color=color, alpha=0.5,
+        label=f"{corner} (measured)"
+    )
+    
+    # Plot theoretical tetrahedron corner for this index
+    ax.scatter(
+        P_LOCAL[i,0], P_LOCAL[i,1], P_LOCAL[i,2],
+        s=120, color=color, marker="^", edgecolors="k",
+        label=f"{corner} (theoretical)"
+    )
+
+ax.set_title("RTK Measurement Spread in LOCAL Frame (Measured vs Theoretical)")
+ax.set_xlabel("Local X [m]")
+ax.set_ylabel("Local Y [m]")
+ax.set_zlabel("Local Z [m]")
+ax.legend()
+plt.tight_layout()
+plt.show()
