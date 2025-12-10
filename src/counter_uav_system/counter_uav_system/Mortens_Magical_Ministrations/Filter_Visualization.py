@@ -5,35 +5,57 @@ from rclpy.node import Node
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from geometry_msgs.msg import Point, Vector3
-from uav_interfaces.msg import DroneState, DOAData, PointPillarsData, ParticleFilterState
+from std_msgs.msg import Header, String
+from geometry_msgs.msg import Point
+import json
 from collections import deque
-import threading
 import select
 import sys
 import termios
 import tty
 import os
-
+plot_range = 100 # meters
 class FilterVisualizationNode(Node):
-    """Separate node for visualization with keyboard controls"""
+    """Visualization node with real particle data from filter"""
     def __init__(self):
         super().__init__('filter_visualization_node')
         
+        # Declare parameters
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('system_x', 0.0),
+                ('system_y', 0.0),
+                ('system_z', 0.0),
+                ('history_length', 50),
+                ('max_particles_to_show', 2000),
+                ('particle_alpha', 0.3),
+                ('trajectory_linewidth', 2)
+            ]
+        )
+        
+        # Get parameters
+        self.system_position = np.array([
+            self.get_parameter('system_x').value,
+            self.get_parameter('system_y').value,
+            self.get_parameter('system_z').value
+        ])
+        self.history_length = self.get_parameter('history_length').value
+        self.max_particles = self.get_parameter('max_particles_to_show').value
+        self.particle_alpha = self.get_parameter('particle_alpha').value
+        self.trajectory_linewidth = self.get_parameter('trajectory_linewidth').value
+        
         # Data storage for visualization
-        self.true_positions = deque(maxlen=200)
-        self.estimated_positions = deque(maxlen=200)
-        self.doa_measurements = deque(maxlen=5)
-        self.pp_measurements = deque(maxlen=5)
-        self.particles_history = deque(maxlen=200)  # Store recent particle sets
+        self.true_positions = deque(maxlen=self.history_length)
+        self.estimated_positions = deque(maxlen=self.history_length)
+        self.doa_measurements = deque(maxlen=1)
+        self.pp_measurements = deque(maxlen=1)
+        self.particles_history = deque(maxlen=1)  # Store recent particle sets
         
         # Latest data
         self.latest_true_state = None
         self.latest_estimated_state = None
         self.latest_particles = None
-        
-        # System position
-        self.system_position = np.array([0, 0, 0])
         
         # Visualization toggles
         self.show_particles = True
@@ -44,37 +66,37 @@ class FilterVisualizationNode(Node):
         self.show_true_position = True
         self.show_estimated_position = True
         
-        # Subscribers
+        # Subscribers - all using String messages
         self.true_state_sub = self.create_subscription(
-            DroneState,
+            String,
             '/drone/true_state',
             self.true_state_callback,
             10
         )
         
         self.filter_state_sub = self.create_subscription(
-            ParticleFilterState,
+            String,
             '/filter/state',
             self.filter_state_callback,
             10
         )
         
         self.particles_sub = self.create_subscription(
-            ParticleFilterState,
+            String,
             '/filter/particles',
             self.particles_callback,
             10
         )
         
         self.doa_sub = self.create_subscription(
-            DOAData,
+            String,
             '/sensors/doa',
             self.doa_callback,
             10
         )
         
         self.pp_sub = self.create_subscription(
-            PointPillarsData,
+            String,
             '/sensors/point_pillars',
             self.pp_callback,
             10
@@ -83,7 +105,7 @@ class FilterVisualizationNode(Node):
         # Visualization setup
         self.setup_plot()
         
-        # Visualization timer - runs at lower frequency
+        # Visualization timer
         self.viz_timer = self.create_timer(0.2, self.update_plot)  # 5 Hz update
         
         # Keyboard input timer
@@ -92,7 +114,7 @@ class FilterVisualizationNode(Node):
         # Store original terminal settings
         self.old_settings = termios.tcgetattr(sys.stdin)
         
-        self.get_logger().info("Filter visualization node started with keyboard controls")
+        self.get_logger().info("Filter visualization node started with real particle data")
         self.print_controls()
 
     def print_controls(self):
@@ -119,9 +141,9 @@ class FilterVisualizationNode(Node):
         plt.ion()
         self.fig = plt.figure(figsize=(14, 8))
         self.ax = self.fig.add_subplot(111, projection='3d')
-        self.ax.set_xlim([-50, 50])
-        self.ax.set_ylim([-50, 50])
-        self.ax.set_zlim([0, 50])
+        self.ax.set_xlim([-plot_range, plot_range])
+        self.ax.set_ylim([-plot_range, plot_range])
+        self.ax.set_zlim([0, plot_range])
         self.ax.set_xlabel('X (m)')
         self.ax.set_ylabel('Y (m)')
         self.ax.set_zlabel('Z (m)')
@@ -217,54 +239,89 @@ class FilterVisualizationNode(Node):
             raise KeyboardInterrupt
 
     def true_state_callback(self, msg):
-        """Store true state for visualization"""
-        if (np.isfinite(msg.true_position.x) and np.isfinite(msg.true_position.y) and 
-            np.isfinite(msg.true_position.z)):
-            position = np.array([msg.true_position.x, msg.true_position.y, msg.true_position.z])
-            self.true_positions.append(position)
-            self.latest_true_state = position
+        """Store true state from JSON string"""
+        try:
+            data = json.loads(msg.data)
+            position = np.array([
+                data['true_position']['x'],
+                data['true_position']['y'],
+                data['true_position']['z']
+            ])
+            if np.all(np.isfinite(position)):
+                self.true_positions.append(position)
+                self.latest_true_state = position
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse true state: {e}")
 
     def filter_state_callback(self, msg):
-        """Store estimated state for visualization"""
-        position = np.array([msg.estimated_position.x, msg.estimated_position.y, msg.estimated_position.z])
-        self.estimated_positions.append(position)
-        self.latest_estimated_state = position
+        """Store estimated state from JSON string"""
+        try:
+            data = json.loads(msg.data)
+            position = np.array([
+                data['estimated_position']['x'],
+                data['estimated_position']['y'],
+                data['estimated_position']['z']
+            ])
+            if np.all(np.isfinite(position)):
+                self.estimated_positions.append(position)
+                self.latest_estimated_state = position
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse filter state: {e}")
 
     def particles_callback(self, msg):
-        """Store particles for visualization"""
-        # For now, we'll generate some dummy particles around the estimated position
-        # In practice, you should create a proper particle message type
-        if self.latest_estimated_state is not None:
-            # Generate particles around current estimate
-            num_particles = 100
-            particles = np.random.normal(self.latest_estimated_state, 5.0, (num_particles, 3))
-            particles[:, 2] = np.maximum(particles[:, 2], 0.1)  # Keep above ground
-            self.latest_particles = particles
-            self.particles_history.append(particles.copy())
+        """Store real particles from particle filter"""
+        try:
+            data = json.loads(msg.data)
+            if 'particles' in data and data['particles']:
+                particles = np.array(data['particles'])
+                # Ensure particles are valid
+                if particles.size > 0 and np.all(np.isfinite(particles)):
+                    self.latest_particles = particles
+                    self.particles_history.append(particles.copy())
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            self.get_logger().warning(f"Failed to parse particles: {e}")
 
     def doa_callback(self, msg):
-        """Store DOA measurements for visualization"""
-        azimuth_rad = np.deg2rad(msg.azimuth)
-        elevation_rad = np.deg2rad(msg.elevation)
-        x = 30 * np.cos(elevation_rad) * np.cos(azimuth_rad)
-        y = 30 * np.cos(elevation_rad) * np.sin(azimuth_rad)
-        z = 30 * np.sin(elevation_rad)
-        self.doa_measurements.append(np.array([x, y, z]))
+        """Store DOA measurements from JSON string"""
+        try:
+            data = json.loads(msg.data)
+            azimuth = np.deg2rad(data['azimuth'])
+            elevation = np.deg2rad(data['elevation'])
+            
+            # Create a point in the DOA direction at 30m distance
+            distance = 30.0
+            x = distance * np.cos(elevation) * np.cos(azimuth)
+            y = distance * np.cos(elevation) * np.sin(azimuth)
+            z = distance * np.sin(elevation)
+            
+            doa_point = np.array([x, y, z])
+            if np.all(np.isfinite(doa_point)):
+                self.doa_measurements.append(doa_point)
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse DOA data: {e}")
 
     def pp_callback(self, msg):
-        """Store PointPillars measurements for visualization"""
-        if (np.isfinite(msg.position.x) and np.isfinite(msg.position.y) and np.isfinite(msg.position.z)):
-            position = np.array([msg.position.x, msg.position.y, msg.position.z])
-            self.pp_measurements.append(position)
+        """Store PointPillars measurements from JSON string"""
+        try:
+            data = json.loads(msg.data)
+            position = np.array([
+                data['position']['x'],
+                data['position']['y'],
+                data['position']['z']
+            ])
+            if np.all(np.isfinite(position)):
+                self.pp_measurements.append(position)
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse PP data: {e}")
 
     def update_plot(self):
         """Update visualization with toggles"""
         try:
             self.ax.clear()
             
-            self.ax.set_xlim([-50, 50])
-            self.ax.set_ylim([-50, 50])
-            self.ax.set_zlim([0, 50])
+            self.ax.set_xlim([-plot_range, plot_range])
+            self.ax.set_ylim([-plot_range, plot_range])
+            self.ax.set_zlim([0, plot_range])
             self.ax.set_xlabel('X (m)')
             self.ax.set_ylabel('Y (m)')
             self.ax.set_zlabel('Z (m)')
@@ -281,38 +338,52 @@ class FilterVisualizationNode(Node):
             self.ax.set_title(title)
             
             # Plot system origin (always visible)
-            self.ax.scatter(*self.system_position, c='black', s=100, marker='*', label='System Origin')
+            self.ax.scatter(*self.system_position, c='black', s=100, marker='*', 
+                          label='System Origin')
             
             # Plot true trajectory
             if self.show_true_trajectory and len(self.true_positions) > 1:
                 true_traj = np.array(self.true_positions)
                 self.ax.plot(true_traj[:, 0], true_traj[:, 1], true_traj[:, 2], 
-                            'g-', linewidth=2, label='True Trajectory')
+                            'g-', linewidth=self.trajectory_linewidth, 
+                            label='True Trajectory')
             
             # Plot estimated trajectory
             if self.show_estimated_trajectory and len(self.estimated_positions) > 1:
                 est_traj = np.array(self.estimated_positions)
                 self.ax.plot(est_traj[:, 0], est_traj[:, 1], est_traj[:, 2], 
-                            'b-', linewidth=2, label='Estimated Trajectory')
+                            'b-', linewidth=self.trajectory_linewidth, 
+                            label='Estimated Trajectory')
             
             # Plot DOA measurements
             if self.show_doa and len(self.doa_measurements) > 0:
                 doa_points = np.array(self.doa_measurements)
                 self.ax.scatter(doa_points[:, 0], doa_points[:, 1], doa_points[:, 2],
-                              c='orange', s=50, alpha=0.5, marker='^', label='DOA Measurements')
+                              c='orange', s=50, alpha=0.5, marker='^', 
+                              label='DOA Measurements')
             
             # Plot PointPillars measurements
             if self.show_pp and len(self.pp_measurements) > 0:
                 pp_points = np.array(self.pp_measurements)
                 self.ax.scatter(pp_points[:, 0], pp_points[:, 1], pp_points[:, 2],
-                              c='purple', s=50, alpha=0.5, marker='s', label='PP Measurements')
+                              c='purple', s=50, alpha=0.5, marker='s', 
+                              label='PP Measurements')
             
-            # Plot particles
+            # Plot REAL particles from filter
             if self.show_particles and self.latest_particles is not None:
-                self.ax.scatter(self.latest_particles[:, 0], 
-                              self.latest_particles[:, 1], 
-                              self.latest_particles[:, 2], 
-                              c='red', alpha=0.3, s=5, label='Particles')
+                # Sample particles if there are too many
+                if len(self.latest_particles) > self.max_particles:
+                    indices = np.random.choice(len(self.latest_particles), 
+                                             self.max_particles, replace=False)
+                    particles_to_show = self.latest_particles[indices]
+                else:
+                    particles_to_show = self.latest_particles
+                
+                self.ax.scatter(particles_to_show[:, 0], 
+                              particles_to_show[:, 1], 
+                              particles_to_show[:, 2], 
+                              c='red', alpha=self.particle_alpha, s=5, 
+                              label='Particles')
             
             # Plot current true position
             if self.show_true_position and self.latest_true_state is not None:
@@ -328,7 +399,7 @@ class FilterVisualizationNode(Node):
             if (self.show_true_trajectory or self.show_estimated_trajectory or 
                 self.show_doa or self.show_pp or self.show_particles or
                 self.show_true_position or self.show_estimated_position):
-                self.ax.legend()
+                self.ax.legend(loc='upper left')
             
             plt.draw()
             plt.pause(0.001)
@@ -362,4 +433,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
