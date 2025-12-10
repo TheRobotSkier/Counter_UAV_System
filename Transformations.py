@@ -5,7 +5,7 @@ from src.cuav_acoustic.cuav_acoustic.config import regular_tetrahedron_array
 #Everything is in mm
 
 # True = print transforms, False = no prints
-PRINT=True
+PRINT=False
 
 #The first transform is used to locate the center of the Aqoustic array foot
 
@@ -57,8 +57,7 @@ R_Z_180 = np.array([
     [ 0, 0, 1]
 ])
 
-BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS = R_Z_180 @ MIC_POSITIONS_NORMAL.T #Rotation to match the real mic positions
-print("BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS for large array:", BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS.T)
+BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS = MIC_POSITIONS_NORMAL@R_Z_180.T #Rotation to match the real mic positions
 
 # Dimensions for the RTK transform calibration
 GPS_TRANSFORM_PLATE_PRINT= 10 #Thickness of the 3D printed plate that holds the GPS receiver for RTK transform calibration
@@ -66,11 +65,8 @@ METAL_GROUND_PLATE=1 #Thickness of the metal plate that is in between the GPS re
 GPS_TRANSFORM_PLATE = GPS_TRANSFORM_PLATE_PRINT + METAL_GROUND_PLATE #Total thickness from base station to GPS receiver
 ARRAY_BASE_L_TOP_2_GPS = np.array([0,0,GPS_TRANSFORM_PLATE]) #From mic_base to GPS receiver
 
-BASE_2_GPS_MIC_1=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[0]
-BASE_2_GPS_MIC_2=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[1]
-BASE_2_GPS_MIC_3=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[2]
-BASE_2_GPS_MIC_4=BASE_2_ARRAY_L_MIC_TOP +BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS[3]
 
+BASE_2_GPS_MIC_I=BASE_2_ARRAY_L_MIC_TOP + ARRAY_BASE_L_TOP_2_GPS + BASE_2_ARRAY_L_MIC_ORIGIN_2_MIC_POSITIONS
 
 #------ Pan/Tilt System Transforms and Dimensions ------#
 #Transfroms for the pan/tiltsystem
@@ -149,8 +145,7 @@ LIDAR_OFFSET = 0.073
 
 #Full world to LIdar and acoustic array transforms
 BASE_2_LIDAR = [758.651, 0.341, 298] #298mm is the height from ground to lidar frame center
-print("Transform_Functions.py loaded")
-print("BASE_2_LIDAR:", BASE_2_LIDAR)
+
 
 # ------ Transformatic matrix ------#
 
@@ -183,30 +178,30 @@ T_BASE_2_ARRAY_L_MIC_ORIGIN = np.array([
 ])
 
 T_BASE_2_GPS_MIC_1 = np.array([
-    [1, 0, 0, BASE_2_GPS_MIC_1[0]],
-    [0, 1, 0, BASE_2_GPS_MIC_1[1]],
-    [0, 0, 1, BASE_2_GPS_MIC_1[2]],
+    [1, 0, 0, BASE_2_GPS_MIC_I[0][0]],
+    [0, 1, 0, BASE_2_GPS_MIC_I[0][1]],
+    [0, 0, 1, BASE_2_GPS_MIC_I[0][2]],
     [0, 0, 0, 1]
 ])
 
 T_BASE_2_GPS_MIC_2 = np.array([
-    [1, 0, 0, BASE_2_GPS_MIC_2[0]],
-    [0, 1, 0, BASE_2_GPS_MIC_2[1]],
-    [0, 0, 1, BASE_2_GPS_MIC_2[2]],
+    [1, 0, 0, BASE_2_GPS_MIC_I[1][0]],
+    [0, 1, 0, BASE_2_GPS_MIC_I[1][1]],
+    [0, 0, 1, BASE_2_GPS_MIC_I[1][2]],
     [0, 0, 0, 1]
 ])
 
 T_BASE_2_GPS_MIC_3 = np.array([
-    [1, 0, 0, BASE_2_GPS_MIC_3[0]],
-    [0, 1, 0, BASE_2_GPS_MIC_3[1]],
-    [0, 0, 1, BASE_2_GPS_MIC_3[2]],
+    [1, 0, 0, BASE_2_GPS_MIC_I[2][0]],
+    [0, 1, 0, BASE_2_GPS_MIC_I[2][1]],
+    [0, 0, 1, BASE_2_GPS_MIC_I[2][2]],
     [0, 0, 0, 1]
 ])
 
 T_BASE_2_GPS_MIC_4 = np.array([
-    [1, 0, 0, BASE_2_GPS_MIC_4[0]],
-    [0, 1, 0, BASE_2_GPS_MIC_4[1]],
-    [0, 0, 1, BASE_2_GPS_MIC_4[2]],
+    [1, 0, 0, BASE_2_GPS_MIC_I[3][0]],
+    [0, 1, 0, BASE_2_GPS_MIC_I[3][1]],
+    [0, 0, 1, BASE_2_GPS_MIC_I[3][2]],
     [0, 0, 0, 1]
 ])
 
@@ -228,4 +223,7 @@ T_BASE_Lidar = [
 # To transform from small array frame to world frame:
 T_ARRAY_L_MIC_CENTER_2_BASE = np.linalg.inv(T_BASE_2_ARRAY_L_MIC_CENTER)
 ##
-print(T_ARRAY_L_MIC_CENTER_2_BASE)
+if PRINT:
+    print("Transform_Functions.py loaded")
+    print("BASE_2_LIDAR:", BASE_2_LIDAR)
+    print("T_ARRAY_L_MIC_CENTER_2_BASE:\n", T_ARRAY_L_MIC_CENTER_2_BASE)
