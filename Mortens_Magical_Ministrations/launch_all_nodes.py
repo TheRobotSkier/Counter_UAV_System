@@ -57,8 +57,8 @@ def main():
         print("✓ Particle filter node started")
         
         # 4. Visualization Node
-        from Filter_Visualization import SensorRangeVisualization
-        viz_node = SensorRangeVisualization()
+        from Filter_Visualization import FilterVisualizationNode
+        viz_node = FilterVisualizationNode()
         executor.add_node(viz_node)
         nodes.append(viz_node)
         print("✓ Visualization node started")
