@@ -81,7 +81,6 @@ class ParticleFilter(Node):
         self.particles[:, 2] = np.maximum(self.particles[:, 2], 0.1)
 
     def update_with_doa(self, azimuth_deg, elevation_deg):
-        """Update weights based on DOA measurement"""
         azimuth = np.deg2rad(azimuth_deg)
         elevation = np.deg2rad(elevation_deg)
         
@@ -106,8 +105,6 @@ class ParticleFilter(Node):
         az_likelihood = np.exp(-0.5 * (az_diff / self.doa_std) ** 2)
         el_likelihood = np.exp(-0.5 * (el_diff / self.doa_std) ** 2)
         self.weights *= az_likelihood * el_likelihood
-        
-        self.normalize_weights()
 
     def update_with_pp(self, pp_position):
         """Update weights based on PointPillars measurement"""
