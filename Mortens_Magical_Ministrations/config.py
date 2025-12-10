@@ -28,7 +28,7 @@ UAV_PARAMS = {
 
 # Sensor Simulation Parameters
 SENSOR_PARAMS = {
-    'doa_noise_level': 5.0,  # degrees
+    'doa_noise_level': 10.0,  # degrees
     'pp_noise_std': 1.0,  # meters
     'system_position': [0.0, 0.0, 0.0],  # x, y, z
     'log_level': 1,

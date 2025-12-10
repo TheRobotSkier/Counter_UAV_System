@@ -4,294 +4,432 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 import matplotlib.pyplot as plt
-from std_msgs.msg import String
+from mpl_toolkits.mplot3d import Axes3D
+from std_msgs.msg import Header, String
+from geometry_msgs.msg import Point
 import json
 from collections import deque
+import select
 import sys
+import termios
+import tty
+import os
 
-class SensorRangeVisualization(Node):
-    """Visualization showing different sensor ranges and detection status"""
+class FilterVisualizationNode(Node):
+    """Visualization node with real particle data from filter"""
     def __init__(self):
-        super().__init__('sensor_range_viz')
+        super().__init__('filter_visualization_node')
         
-        # Store data
-        self.true_positions = deque(maxlen=100)
-        self.estimated_positions = deque(maxlen=100)
-        self.particles = None
+        # Declare parameters
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('system_x', 0.0),
+                ('system_y', 0.0),
+                ('system_z', 0.0),
+                ('history_length', 200),
+                ('max_particles_to_show', 100),
+                ('particle_alpha', 0.3),
+                ('trajectory_linewidth', 2)
+            ]
+        )
         
-        # Sensor parameters
-        self.doa_range = 90.0    # DOA range in meters
-        self.pp_range = 70.0     # PointPillars range in meters
+        # Get parameters
+        self.system_position = np.array([
+            self.get_parameter('system_x').value,
+            self.get_parameter('system_y').value,
+            self.get_parameter('system_z').value
+        ])
+        self.history_length = self.get_parameter('history_length').value
+        self.max_particles = self.get_parameter('max_particles_to_show').value
+        self.particle_alpha = self.get_parameter('particle_alpha').value
+        self.trajectory_linewidth = self.get_parameter('trajectory_linewidth').value
         
-        # Detection flags
-        self.doa_detected = False
-        self.pp_detected = False
+        # Data storage for visualization
+        self.true_positions = deque(maxlen=self.history_length)
+        self.estimated_positions = deque(maxlen=self.history_length)
+        self.doa_measurements = deque(maxlen=5)
+        self.pp_measurements = deque(maxlen=5)
+        self.particles_history = deque(maxlen=10)  # Store recent particle sets
         
-        # Last known distances
-        self.last_distance = 0.0
+        # Latest data
+        self.latest_true_state = None
+        self.latest_estimated_state = None
+        self.latest_particles = None
         
-        # Setup plot
+        # Visualization toggles
+        self.show_particles = True
+        self.show_doa = True
+        self.show_pp = True
+        self.show_true_trajectory = True
+        self.show_estimated_trajectory = True
+        self.show_true_position = True
+        self.show_estimated_position = True
+        
+        # Subscribers - all using String messages
+        self.true_state_sub = self.create_subscription(
+            String,
+            '/drone/true_state',
+            self.true_state_callback,
+            10
+        )
+        
+        self.filter_state_sub = self.create_subscription(
+            String,
+            '/filter/state',
+            self.filter_state_callback,
+            10
+        )
+        
+        self.particles_sub = self.create_subscription(
+            String,
+            '/filter/particles',
+            self.particles_callback,
+            10
+        )
+        
+        self.doa_sub = self.create_subscription(
+            String,
+            '/sensors/doa',
+            self.doa_callback,
+            10
+        )
+        
+        self.pp_sub = self.create_subscription(
+            String,
+            '/sensors/point_pillars',
+            self.pp_callback,
+            10
+        )
+        
+        # Visualization setup
+        self.setup_plot()
+        
+        # Visualization timer
+        self.viz_timer = self.create_timer(0.2, self.update_plot)  # 5 Hz update
+        
+        # Keyboard input timer
+        self.keyboard_timer = self.create_timer(0.1, self.check_keyboard_input)
+        
+        # Store original terminal settings
+        self.old_settings = termios.tcgetattr(sys.stdin)
+        
+        self.get_logger().info("Filter visualization node started with real particle data")
+        self.print_controls()
+
+    def print_controls(self):
+        """Print keyboard controls to terminal"""
+        controls = """
+        === VISUALIZATION CONTROLS ===
+        [P] - Toggle Particles
+        [D] - Toggle DOA Measurements  
+        [M] - Toggle PointPillars Measurements
+        [T] - Toggle True Trajectory
+        [E] - Toggle Estimated Trajectory
+        [1] - Toggle True Position
+        [2] - Toggle Estimated Position
+        [A] - Toggle ALL elements
+        [C] - Clear all trajectories
+        [H] - Show this help
+        [Q] - Quit visualization
+        ==============================
+        """
+        print(controls)
+
+    def setup_plot(self):
+        """Initialize 3D plot for visualization"""
         plt.ion()
-        self.fig, self.ax = plt.subplots(figsize=(14, 10), subplot_kw={'projection': '3d'})
-        
-        # Set plot limits
-        plot_limit = 100  # Show up to 150m for spawn at 100m
-        self.ax.set_xlim([-plot_limit, plot_limit])
-        self.ax.set_ylim([-plot_limit, plot_limit])
-        self.ax.set_zlim([0, plot_limit])
-        
-        self.ax.set_xlabel('X (m)', fontsize=12)
-        self.ax.set_ylabel('Y (m)', fontsize=12)
-        self.ax.set_zlabel('Z (m)', fontsize=12)
-        
-        # Draw sensor ranges
-        self.draw_sensor_ranges()
-        
-        # Subscribe to topics
-        self.create_subscription(String, '/drone/true_state', self.true_cb, 10)
-        self.create_subscription(String, '/filter/state', self.est_cb, 10)
-        self.create_subscription(String, '/filter/particles', self.particles_cb, 10)
-        self.create_subscription(String, '/sensors/doa', self.doa_status_cb, 10)
-        self.create_subscription(String, '/sensors/point_pillars', self.pp_status_cb, 10)
-        
-        # Update plot at 5Hz
-        self.create_timer(0.2, self.update_plot)
-        
-        print("\n" + "="*60)
-        print("SENSOR RANGE VISUALIZATION")
-        print(f"  DOA Sensor Range: {self.doa_range}m (Blue)")
-        print(f"  PointPillars Range: {self.pp_range}m (Red)")
-        print("="*60)
-        print("Drone Color Legend:")
-        print("  RED: >90m (No detection)")
-        print("  YELLOW: 70-90m (DOA only)")
-        print("  GREEN: ≤70m (DOA + PointPillars)")
-        print("="*60)
-        print("Close window to stop.\n")
+        self.fig = plt.figure(figsize=(14, 8))
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax.set_xlim([-50, 50])
+        self.ax.set_ylim([-50, 50])
+        self.ax.set_zlim([0, 50])
+        self.ax.set_xlabel('X (m)')
+        self.ax.set_ylabel('Y (m)')
+        self.ax.set_zlabel('Z (m)')
+        self.ax.set_title('Particle Filter - 3D Tracking (Press H for controls)')
 
-    def draw_sensor_ranges(self):
-        """Draw transparent spheres for both sensor ranges"""
-        # DOA range sphere (90m) - Blue
-        u = np.linspace(0, 2 * np.pi, 20)
-        v = np.linspace(0, np.pi, 20)
-        
-        x = self.doa_range * np.outer(np.cos(u), np.sin(v))
-        y = self.doa_range * np.outer(np.sin(u), np.sin(v))
-        z = self.doa_range * np.outer(np.ones(np.size(u)), np.cos(v))
-        
-        self.ax.plot_wireframe(x, y, z, color='blue', alpha=0.15, linewidth=0.8, 
-                              label=f'DOA Range ({self.doa_range}m)')
-        
-        # PointPillars range sphere (70m) - Red
-        x_pp = self.pp_range * np.outer(np.cos(u), np.sin(v))
-        y_pp = self.pp_range * np.outer(np.sin(u), np.sin(v))
-        z_pp = self.pp_range * np.outer(np.ones(np.size(u)), np.cos(v))
-        
-        self.ax.plot_wireframe(x_pp, y_pp, z_pp, color='red', alpha=0.15, linewidth=0.8,
-                              label=f'PP Range ({self.pp_range}m)')
-
-    def get_detection_status(self, distance):
-        """Determine detection status based on distance"""
-        self.doa_detected = distance <= self.doa_range
-        self.pp_detected = distance <= self.pp_range
-        
-        if distance > self.doa_range:
-            return "OUT OF RANGE", "red", 100
-        elif distance > self.pp_range:
-            return "DOA ONLY", "yellow", 120
-        else:
-            return "BOTH SENSORS", "green", 150
-
-    def true_cb(self, msg):
-        """Store true position"""
+    def setup_keyboard_listening(self):
+        """Set up terminal for non-blocking keyboard input"""
         try:
-            data = json.loads(msg.data)
-            pos = data['true_position']
-            self.true_positions.append([pos['x'], pos['y'], pos['z']])
+            tty.setraw(sys.stdin.fileno())
+        except:
+            pass
+
+    def restore_terminal(self):
+        """Restore terminal settings"""
+        try:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
+        except:
+            pass
+
+    def check_keyboard_input(self):
+        """Check for keyboard input without blocking"""
+        try:
+            if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                key = sys.stdin.read(1).lower()
+                self.handle_keypress(key)
+        except:
+            pass
+
+    def handle_keypress(self, key):
+        """Handle keyboard input"""
+        if key == 'p':
+            self.show_particles = not self.show_particles
+            self.get_logger().info(f"Particles: {'ON' if self.show_particles else 'OFF'}")
             
-            # Update distance
-            position = np.array([pos['x'], pos['y'], pos['z']])
-            self.last_distance = np.linalg.norm(position)
-        except:
-            pass
+        elif key == 'd':
+            self.show_doa = not self.show_doa
+            self.get_logger().info(f"DOA Measurements: {'ON' if self.show_doa else 'OFF'}")
+            
+        elif key == 'm':
+            self.show_pp = not self.show_pp
+            self.get_logger().info(f"PointPillars Measurements: {'ON' if self.show_pp else 'OFF'}")
+            
+        elif key == 't':
+            self.show_true_trajectory = not self.show_true_trajectory
+            self.get_logger().info(f"True Trajectory: {'ON' if self.show_true_trajectory else 'OFF'}")
+            
+        elif key == 'e':
+            self.show_estimated_trajectory = not self.show_estimated_trajectory
+            self.get_logger().info(f"Estimated Trajectory: {'ON' if self.show_estimated_trajectory else 'OFF'}")
+            
+        elif key == '1':
+            self.show_true_position = not self.show_true_position
+            self.get_logger().info(f"True Position: {'ON' if self.show_true_position else 'OFF'}")
+            
+        elif key == '2':
+            self.show_estimated_position = not self.show_estimated_position
+            self.get_logger().info(f"Estimated Position: {'ON' if self.show_estimated_position else 'OFF'}")
+            
+        elif key == 'a':
+            # Toggle all elements
+            all_on = (self.show_particles and self.show_doa and self.show_pp and 
+                     self.show_true_trajectory and self.show_estimated_trajectory and
+                     self.show_true_position and self.show_estimated_position)
+            
+            new_state = not all_on
+            self.show_particles = new_state
+            self.show_doa = new_state
+            self.show_pp = new_state
+            self.show_true_trajectory = new_state
+            self.show_estimated_trajectory = new_state
+            self.show_true_position = new_state
+            self.show_estimated_position = new_state
+            
+            state_str = "ON" if new_state else "OFF"
+            self.get_logger().info(f"All elements: {state_str}")
+            
+        elif key == 'c':
+            # Clear trajectories
+            self.true_positions.clear()
+            self.estimated_positions.clear()
+            self.doa_measurements.clear()
+            self.pp_measurements.clear()
+            self.particles_history.clear()
+            self.get_logger().info("All trajectories cleared")
+            
+        elif key == 'h':
+            self.print_controls()
+            
+        elif key == 'q':
+            self.get_logger().info("Quitting visualization...")
+            self.restore_terminal()
+            plt.close('all')
+            raise KeyboardInterrupt
 
-    def est_cb(self, msg):
-        """Store estimated position"""
+    def true_state_callback(self, msg):
+        """Store true state from JSON string"""
         try:
             data = json.loads(msg.data)
-            pos = data['estimated_position']
-            self.estimated_positions.append([pos['x'], pos['y'], pos['z']])
-        except:
-            pass
+            position = np.array([
+                data['true_position']['x'],
+                data['true_position']['y'],
+                data['true_position']['z']
+            ])
+            if np.all(np.isfinite(position)):
+                self.true_positions.append(position)
+                self.latest_true_state = position
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse true state: {e}")
 
-    def particles_cb(self, msg):
-        """Store particles"""
+    def filter_state_callback(self, msg):
+        """Store estimated state from JSON string"""
         try:
             data = json.loads(msg.data)
-            self.particles = np.array(data['particles'])
-        except:
-            pass
+            position = np.array([
+                data['estimated_position']['x'],
+                data['estimated_position']['y'],
+                data['estimated_position']['z']
+            ])
+            if np.all(np.isfinite(position)):
+                self.estimated_positions.append(position)
+                self.latest_estimated_state = position
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse filter state: {e}")
 
-    def doa_status_cb(self, msg):
-        """Update DOA detection status"""
+    def particles_callback(self, msg):
+        """Store real particles from particle filter"""
         try:
             data = json.loads(msg.data)
-            self.doa_detected = data.get('in_range', False)
-        except:
-            pass
+            if 'particles' in data and data['particles']:
+                particles = np.array(data['particles'])
+                # Ensure particles are valid
+                if particles.size > 0 and np.all(np.isfinite(particles)):
+                    self.latest_particles = particles
+                    self.particles_history.append(particles.copy())
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            self.get_logger().warning(f"Failed to parse particles: {e}")
 
-    def pp_status_cb(self, msg):
-        """Update PointPillars detection status"""
+    def doa_callback(self, msg):
+        """Store DOA measurements from JSON string"""
         try:
             data = json.loads(msg.data)
-            self.pp_detected = data.get('in_range', False)
-        except:
-            pass
+            azimuth = np.deg2rad(data['azimuth'])
+            elevation = np.deg2rad(data['elevation'])
+            
+            # Create a point in the DOA direction at 30m distance
+            distance = 30.0
+            x = distance * np.cos(elevation) * np.cos(azimuth)
+            y = distance * np.cos(elevation) * np.sin(azimuth)
+            z = distance * np.sin(elevation)
+            
+            doa_point = np.array([x, y, z])
+            if np.all(np.isfinite(doa_point)):
+                self.doa_measurements.append(doa_point)
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse DOA data: {e}")
+
+    def pp_callback(self, msg):
+        """Store PointPillars measurements from JSON string"""
+        try:
+            data = json.loads(msg.data)
+            position = np.array([
+                data['position']['x'],
+                data['position']['y'],
+                data['position']['z']
+            ])
+            if np.all(np.isfinite(position)):
+                self.pp_measurements.append(position)
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(f"Failed to parse PP data: {e}")
 
     def update_plot(self):
-        """Update the 3D plot"""
+        """Update visualization with toggles"""
         try:
-            # Check if window is still open
-            if not plt.fignum_exists(self.fig.number):
-                raise KeyboardInterrupt
-            
             self.ax.clear()
             
-            # Set plot limits
-            plot_limit = 150
-            self.ax.set_xlim([-plot_limit, plot_limit])
-            self.ax.set_ylim([-plot_limit, plot_limit])
-            self.ax.set_zlim([0, plot_limit])
-            self.ax.set_xlabel('X (m)', fontsize=12)
-            self.ax.set_ylabel('Y (m)', fontsize=12)
-            self.ax.set_zlabel('Z (m)', fontsize=12)
+            self.ax.set_xlim([-50, 50])
+            self.ax.set_ylim([-50, 50])
+            self.ax.set_zlim([0, 50])
+            self.ax.set_xlabel('X (m)')
+            self.ax.set_ylabel('Y (m)')
+            self.ax.set_zlabel('Z (m)')
             
-            # Redraw sensor ranges
-            self.draw_sensor_ranges()
+            # Update title with status
+            status = []
+            if self.show_particles: status.append("Particles")
+            if self.show_doa: status.append("DOA")
+            if self.show_pp: status.append("PP")
+            if self.show_true_trajectory: status.append("True")
+            if self.show_estimated_trajectory: status.append("Est")
             
-            # Plot sensor position at origin
-            self.ax.scatter(0, 0, 0, c='black', s=400, marker='*', 
-                          label='Sensor System', alpha=0.9, edgecolors='white', linewidth=2)
+            title = f'Particle Filter - Showing: {", ".join(status) if status else "NOTHING"}'
+            self.ax.set_title(title)
             
-            # Plot true path if available
-            if len(self.true_positions) > 1:
-                true_array = np.array(self.true_positions)
-                
-                # Plot trajectory
-                self.ax.plot(true_array[:, 0], true_array[:, 1], true_array[:, 2], 
-                            'gray', linewidth=1.5, label='Drone Path', alpha=0.5, linestyle='--')
-                
-                # Plot current drone position with color based on range
-                if len(true_array) > 0:
-                    last_pos = true_array[-1]
-                    
-                    # Get status based on distance
-                    status, color, size = self.get_detection_status(self.last_distance)
-                    
-                    # Plot drone
-                    self.ax.scatter(last_pos[0], last_pos[1], last_pos[2], 
-                                  c=color, s=size, marker='o', 
-                                  label=f'Drone ({status})', alpha=0.9,
-                                  edgecolors='black', linewidth=2)
+            # Plot system origin (always visible)
+            self.ax.scatter(*self.system_position, c='black', s=100, marker='*', 
+                          label='System Origin')
             
-            # Plot estimated path and position
-            if len(self.estimated_positions) > 1:
-                est_array = np.array(self.estimated_positions)
-                
-                # Plot estimate trajectory
-                self.ax.plot(est_array[:, 0], est_array[:, 1], est_array[:, 2], 
-                            'blue', linewidth=2, label='Filter Estimate', alpha=0.7)
-                
-                # Plot current estimate
-                if len(est_array) > 0:
-                    last_est = est_array[-1]
-                    self.ax.scatter(last_est[0], last_est[1], last_est[2], 
-                                  c='cyan', s=80, marker='s', 
-                                  label='Current Estimate', alpha=0.8,
-                                  edgecolors='black', linewidth=1)
+            # Plot true trajectory
+            if self.show_true_trajectory and len(self.true_positions) > 1:
+                true_traj = np.array(self.true_positions)
+                self.ax.plot(true_traj[:, 0], true_traj[:, 1], true_traj[:, 2], 
+                            'g-', linewidth=self.trajectory_linewidth, 
+                            label='True Trajectory')
             
-            # Plot particles (if any)
-            if self.particles is not None and len(self.particles) > 0:
-                # Sample particles for performance
-                n_particles = min(300, len(self.particles))
-                indices = np.random.choice(len(self.particles), n_particles, replace=False)
-                sampled_particles = self.particles[indices]
-                
-                # Color particles based on detection status
-                if self.pp_detected:
-                    particle_color = 'red'  # Both sensors active
-                elif self.doa_detected:
-                    particle_color = 'orange'  # Only DOA active
+            # Plot estimated trajectory
+            if self.show_estimated_trajectory and len(self.estimated_positions) > 1:
+                est_traj = np.array(self.estimated_positions)
+                self.ax.plot(est_traj[:, 0], est_traj[:, 1], est_traj[:, 2], 
+                            'b-', linewidth=self.trajectory_linewidth, 
+                            label='Estimated Trajectory')
+            
+            # Plot DOA measurements
+            if self.show_doa and len(self.doa_measurements) > 0:
+                doa_points = np.array(self.doa_measurements)
+                self.ax.scatter(doa_points[:, 0], doa_points[:, 1], doa_points[:, 2],
+                              c='orange', s=50, alpha=0.5, marker='^', 
+                              label='DOA Measurements')
+            
+            # Plot PointPillars measurements
+            if self.show_pp and len(self.pp_measurements) > 0:
+                pp_points = np.array(self.pp_measurements)
+                self.ax.scatter(pp_points[:, 0], pp_points[:, 1], pp_points[:, 2],
+                              c='purple', s=50, alpha=0.5, marker='s', 
+                              label='PP Measurements')
+            
+            # Plot REAL particles from filter
+            if self.show_particles and self.latest_particles is not None:
+                # Sample particles if there are too many
+                if len(self.latest_particles) > self.max_particles:
+                    indices = np.random.choice(len(self.latest_particles), 
+                                             self.max_particles, replace=False)
+                    particles_to_show = self.latest_particles[indices]
                 else:
-                    particle_color = 'gray'  # No sensors active
+                    particles_to_show = self.latest_particles
                 
-                self.ax.scatter(sampled_particles[:, 0], sampled_particles[:, 1], 
-                              sampled_particles[:, 2], c=particle_color, 
-                              alpha=0.3, s=10, label='Particles')
+                self.ax.scatter(particles_to_show[:, 0], 
+                              particles_to_show[:, 1], 
+                              particles_to_show[:, 2], 
+                              c='red', alpha=self.particle_alpha, s=5, 
+                              label='Particles')
             
-            # Add status box with text
-            status_text = f"Distance: {self.last_distance:.1f}m\n"
+            # Plot current true position
+            if self.show_true_position and self.latest_true_state is not None:
+                self.ax.scatter(*self.latest_true_state, c='green', s=100, 
+                              marker='o', label='True Position')
             
-            if self.last_distance > self.doa_range:
-                status_text += "Status: NO DETECTION"
-                status_color = "red"
-            elif self.last_distance > self.pp_range:
-                status_text += "Status: DOA ONLY"
-                status_color = "yellow"
-            else:
-                status_text += "Status: BOTH SENSORS"
-                status_color = "green"
+            # Plot current estimate
+            if self.show_estimated_position and self.latest_estimated_state is not None:
+                self.ax.scatter(*self.latest_estimated_state, c='blue', s=100, 
+                              marker='s', label='Current Estimate')
             
-            status_text += f"\nDOA Active: {'✓' if self.doa_detected else '✗'}"
-            status_text += f"\nPP Active: {'✓' if self.pp_detected else '✗'}"
-            
-            # Add text box
-            props = dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor=status_color)
-            self.ax.text2D(0.02, 0.98, status_text, transform=self.ax.transAxes,
-                          fontsize=11, verticalalignment='top', bbox=props,
-                          color='black')
-            
-            # Add title
-            if self.last_distance > self.doa_range:
-                title = "Drone: OUT OF RANGE - Waiting for detection..."
-                title_color = "red"
-            elif self.last_distance > self.pp_range:
-                title = "Drone: DOA DETECTED - Course tracking only"
-                title_color = "orange"
-            else:
-                title = "Drone: BOTH SENSORS ACTIVE - Precise tracking"
-                title_color = "green"
-            
-            self.ax.set_title(title, fontsize=14, color=title_color, fontweight='bold')
-            
-            # Add legend
-            self.ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
-            
-            # Set view angle
-            self.ax.view_init(elev=25, azim=45)
+            # Only show legend if there are visible elements
+            if (self.show_true_trajectory or self.show_estimated_trajectory or 
+                self.show_doa or self.show_pp or self.show_particles or
+                self.show_true_position or self.show_estimated_position):
+                self.ax.legend(loc='upper left')
             
             plt.draw()
             plt.pause(0.001)
             
         except Exception as e:
-            self.get_logger().warning(f"Plot error: {e}")
+            self.get_logger().warning(f"Visualization update error: {str(e)}")
+
+    def destroy_node(self):
+        """Cleanup when node is destroyed"""
+        self.restore_terminal()
+        super().destroy_node()
 
 def main():
     rclpy.init()
-    node = SensorRangeVisualization()
+    node = FilterVisualizationNode()
     
     try:
+        # Set up non-blocking keyboard input
+        node.setup_keyboard_listening()
+        
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\n" + "="*60)
-        print("Visualization stopped")
-        print("="*60)
+        node.get_logger().info("Filter visualization node shutting down...")
     except Exception as e:
-        print(f"Error: {e}")
+        node.get_logger().error(f"Unexpected error: {str(e)}")
     finally:
-        plt.close('all')
+        node.restore_terminal()
         node.destroy_node()
         rclpy.shutdown()
+        plt.close('all')
 
 if __name__ == "__main__":
     main()

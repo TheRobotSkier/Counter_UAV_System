@@ -1,4 +1,3 @@
-# launch_all_nodes.py
 #!/usr/bin/env python3
 """
 Launch all nodes for the particle filter simulation system.
@@ -58,8 +57,8 @@ def main():
         print("✓ Particle filter node started")
         
         # 4. Visualization Node
-        from Filter_Visualization import FilterVisualization
-        viz_node = FilterVisualization()
+        from Filter_Visualization import SensorRangeVisualization
+        viz_node = SensorRangeVisualization()
         executor.add_node(viz_node)
         nodes.append(viz_node)
         print("✓ Visualization node started")
