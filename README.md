@@ -174,3 +174,15 @@ Start serial monitor via latformIO GUI, or:
 ```
 pio device monitor
 ```
+
+# 💡 Future Extensions
+- Sensor fusion (LiDAR + acoustic)
+
+- UAV classifier training
+
+- Targeting + firing control node
+
+- System dashboard / GUI
+
+
+# You now have a full acoustic subsystem for UAV detection and logging.
