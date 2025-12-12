@@ -31,12 +31,21 @@ import csv
 # USER CONFIGURATION
 # --------------------------------------------------------------------
 
-# Path to your 4 recordings (change to your actual paths)
+"""# Path to your 4 recordings (change to your actual paths)
 CSV_FILES = {
     "corner1": "src/cuav_system_logs/Calibration_files/rtk_log_20251209_114932.csv",
     "corner2": "src/cuav_system_logs/Calibration_files/rtk_log_20251209_114454.csv",
     "corner3": "src/cuav_system_logs/Calibration_files/rtk_log_20251209_115408.csv",
     "corner4": "src/cuav_system_logs/Calibration_files/rtk_log_20251209_115234.csv",
+}"""
+# Path to your 4 recordings (change to your actual paths)
+CSV_FILES = {
+    "corner1": "src/cuav_system_logs/11_12_recordings/rtk_log_20251211_111526.csv",
+    "corner2": "src/cuav_system_logs/11_12_recordings/rtk_log_20251211_111745.csv",
+    "corner3": "src/cuav_system_logs/11_12_recordings/rtk_log_20251211_111942.csv",
+    "corner4": "src/cuav_system_logs/11_12_recordings/rtk_log_20251211_112203.csv",
+    "corner1A": "src/cuav_system_logs/11_12_recordings/rtk_log_20251211_112504.csv",
+    "corner2A": "src/cuav_system_logs/11_12_recordings/rtk_log_20251211_112709.csv",
 }
 
 # RTK base station coordinates (WGS84)

@@ -28,8 +28,20 @@ def regular_tetrahedron_array(d_m: float) -> np.ndarray:
     mic_positions = np.array([mic_1, mic_2, mic_3, mic_4])
     return mic_positions
 
-# Precomputed microphone positions (4×3)
-MIC_POSITIONS = regular_tetrahedron_array(D_M)
+# Rotate the microphone array 180 degrees around the Z-axis?
+ROTATE_180 = True   # Set True if array is mounted backwards
+
+R_Z_180 = np.array([
+    [-1,  0,  0],
+    [  0, -1,  0],
+    [  0,  0,  1]
+])
+
+# # Precomputed actual microphone positions (4×3) used by the DOA system:
+if ROTATE_180:
+    MIC_POSITIONS = (R_Z_180 @ regular_tetrahedron_array(D_M).T).T
+else:
+    MIC_POSITIONS = regular_tetrahedron_array(D_M)
 
 
 # ==============================================

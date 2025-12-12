@@ -61,6 +61,58 @@ Counter_UAV_System/
 └── README.md
 
 ---
+## 🔧 System Configuration (`config.py`)
+
+The file:
+´´´
+src/cuav_acoustic/cuav_acoustic/config.py
+´´´
+controls all key acoustic processing parameters.
+
+Below are the **most important settings**:
+
+### 🎤 **Microphone Geometry**
+#### `D_M`
+D_M = 0.213 # (example) distance between microphones in meters
+This is **the physical spacing between microphones** in your tetrahedral array.
+
+👉 **If your array spacing is wrong, DOA will be wrong**, because TDOA → angle conversion depends directly on this value.
+
+Measure from **mic center to mic center** using calipers.  
+This is the **single most important parameter** to set correctly!
+
+
+### 🎧 **Audio + Processing Settings**
+
+| Parameter | Meaning |
+|----------|---------|
+| `NUM_CHANNELS` | Number of microphones (4 for tetrahedral) |
+| `FRAME_DUR_SEC` | Frame size used for FFT (e.g., 20 ms) |
+| `OVERLAP_50` | Whether to use 50% frame overlap |
+| `MIC_POS` | 3D coordinates of the microphones in meters |
+
+### 🌡️ Speed of Sound Settings
+The DOA node can get speed-of-sound two ways:
+
+1. Fixed value
+
+2. From ROS2 service `/get_speed_of_sound`
+
+Relevant config parameters:
+| Parameter                | Description                             |
+| ------------------------ | --------------------------------------- |
+| `DEFAULT_SPEED_OF_SOUND` | Used when mode is `"fixed"`             |
+| `USE_SERVICE`            | If True → call Arduino calibration node |
+
+### 📊 DOA Estimation Settings
+| Parameter             | Meaning                                                  |
+| --------------------- | -------------------------------------------------------- |
+| `SRP_GRID_RES_DEG`    | Search grid resolution (smaller = more accurate, slower) |
+| `GCC_PHAT_ENABLED`    | Toggle GCC-PHAT calculation                              |
+| `DETECTION_THRESHOLD` | Min signal level to classify UAV as "detected"           |
+
+
+---
 
 # ⚙️ Installation
 
