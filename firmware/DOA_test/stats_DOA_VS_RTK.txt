@@ -1,0 +1,132 @@
+L1:
+Alignment summary
+-----------------
+Total RTK samples           : 177
+Rejected (|Δt| > 0.050s) : 44
+Accepted aligned samples    : 133
+Rejection rate              : 24.9%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_L1.csv
+
+
+L2:
+Alignment summary
+-----------------
+Total RTK samples           : 67
+Rejected (|Δt| > 0.050s) : 9
+Accepted aligned samples    : 58
+Rejection rate              : 13.4%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_L2.csv
+
+
+L3:
+Alignment summary
+-----------------
+Total RTK samples           : 204
+Rejected (|Δt| > 0.050s) : 21
+Accepted aligned samples    : 183
+Rejection rate              : 10.3%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_L3.csv
+
+
+L4:
+Alignment summary
+-----------------
+Total RTK samples           : 150
+Rejected (|Δt| > 0.050s) : 25
+Accepted aligned samples    : 125
+Rejection rate              : 16.7%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_L4.csv
+
+
+L5:
+Alignment summary
+-----------------
+Total RTK samples           : 198
+Rejected (|Δt| > 0.050s) : 22
+Accepted aligned samples    : 176
+Rejection rate              : 11.1%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_L5.csv
+
+
+########
+
+
+S1:
+Alignment summary
+-----------------
+Total RTK samples           : 189
+Rejected (|Δt| > 0.050s) : 15
+Accepted aligned samples    : 174
+Rejection rate              : 7.9%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_S1.csv
+
+
+S2:
+Alignment summary
+-----------------
+Total RTK samples           : 167
+Rejected (|Δt| > 0.050s) : 15
+Accepted aligned samples    : 152
+Rejection rate              : 9.0%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_S2.csv
+
+
+S3:
+Alignment summary
+-----------------
+Total RTK samples           : 70
+Rejected (|Δt| > 0.050s) : 26
+Accepted aligned samples    : 44
+Rejection rate              : 37.1%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_S3.csv
+
+S4:
+Alignment summary
+-----------------
+Total RTK samples           : 148
+Rejected (|Δt| > 0.050s) : 16
+Accepted aligned samples    : 132
+Rejection rate              : 10.8%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_S4.csv
+
+
+S5:
+Alignment summary
+-----------------
+Total RTK samples           : 144
+Rejected (|Δt| > 0.050s) : 24
+Accepted aligned samples    : 120
+Rejection rate              : 16.7%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_S5.csv
+
+
+S6:
+Alignment summary
+-----------------
+Total RTK samples           : 162
+Rejected (|Δt| > 0.050s) : 37
+Accepted aligned samples    : 125
+Rejection rate              : 22.8%
+
+Saved aligned DOA comparison to:
+firmware/DOA_test/doa_vs_rtk_comparison/day4/doa_vs_rtk_test_S6.csv

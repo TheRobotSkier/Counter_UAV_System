@@ -33,8 +33,8 @@ if PROJECT_ROOT not in sys.path:
 # CONFIGURATION
 # ============================================================
 
-TEST = "test_S3"
-FILTERED = False   # Use filtered RTK data if True
+TEST = "test_S6"  # Options: test_L1, test_L2, ..., test_S6
+FILTERED = True   # Use filtered RTK data if True
 
 MAX_TIME_OFFSET_S = 0.05  # Reject matches with |Δt| larger than this
 
@@ -56,11 +56,10 @@ DOA_CSV_FILES_TEST_DAY_4 = {
     "test_S6": "src/cuav_system_logs/doa_session_2025-12-12_12-00-41-044424/doa_log.csv",
 }
 
-RTK_BASE_FOLDER = (
-    "firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4"
-    if FILTERED else
-    "firmware/rtk_calibration/rtk_data_in_local_frame/day4"
-)
+if FILTERED:
+    RTK_BASE_FOLDER = "firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4"
+else:
+    RTK_BASE_FOLDER = "firmware/rtk_calibration/rtk_data_in_local_frame/day4"
 
 OUTPUT_DIR = "firmware/DOA_test/doa_vs_rtk_comparison/day4"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -99,12 +98,16 @@ def angular_error_deg(a, b):
 # ============================================================
 # Load RTK data (local frame)
 # ============================================================
-
-rtk_file = next(
-    f for f in os.listdir(RTK_BASE_FOLDER)
-    if f.startswith(TEST) and f.endswith(".csv")
-)
-
+if FILTERED:
+    rtk_file = next(
+        f for f in os.listdir(RTK_BASE_FOLDER)
+        if f.startswith("filtered_"+TEST) and f.endswith(".csv")
+    )
+else:
+    rtk_file = next(
+        f for f in os.listdir(RTK_BASE_FOLDER)
+        if f.startswith(TEST) and f.endswith(".csv")
+    )
 rtk_path = os.path.join(RTK_BASE_FOLDER, rtk_file)
 
 rtk_times = []

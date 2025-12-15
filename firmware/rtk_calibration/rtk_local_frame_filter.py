@@ -28,10 +28,12 @@ import csv
 # --------------------------------------------------------------------
 
 # Path to input CSV (local-frame RTK data)
+"""
 INPUT_CSV = (
     "firmware/rtk_calibration/rtk_data_in_local_frame/day4/"
     "test_S3_rtk_log_in_local_frame_20251212_114031.csv"
-)
+)"""
+INPUT_CSV="firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S6_rtk_log_in_local_frame_20251212_120015.csv"
 
 # Output base directory
 OUTPUT_BASE_DIR = (

@@ -1,0 +1,134 @@
+L1:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_L1_rtk_log_in_local_frame_20251212_102125.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_L1_rtk_log_in_local_frame_20251212_102125.csv
+Allowed qualities : [4, 5]
+Total rows        : 204
+Rows kept         : 177
+Rows removed      : 27
+Kept percentage   : 86.76%
+
+
+L2:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_L2_rtk_log_in_local_frame_20251212_102810.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_L2_rtk_log_in_local_frame_20251212_102810.csv
+Allowed qualities : [4, 5]
+Total rows        : 92
+Rows kept         : 67
+Rows removed      : 25
+Kept percentage   : 72.83%
+
+
+L3:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_L3_rtk_log_in_local_frame_20251212_103224.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_L3_rtk_log_in_local_frame_20251212_103224.csv
+Allowed qualities : [4, 5]
+Total rows        : 265
+Rows kept         : 204
+Rows removed      : 61
+Kept percentage   : 76.98%
+
+
+L4:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_L4_rtk_log_in_local_frame_20251212_105303.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_L4_rtk_log_in_local_frame_20251212_105303.csv
+Allowed qualities : [4, 5]
+Total rows        : 167
+Rows kept         : 150
+Rows removed      : 17
+Kept percentage   : 89.82%
+
+
+L5:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_L5_rtk_log_in_local_frame_20251212_105725.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_L5_rtk_log_in_local_frame_20251212_105725.csv
+Allowed qualities : [4, 5]
+Total rows        : 204
+Rows kept         : 198
+Rows removed      : 6
+Kept percentage   : 97.06%
+
+
+
+#######
+
+
+S1:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S1_rtk_log_in_local_frame_20251212_112651.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_S1_rtk_log_in_local_frame_20251212_112651.csv
+Allowed qualities : [4, 5]
+Total rows        : 234
+Rows kept         : 189
+Rows removed      : 45
+Kept percentage   : 80.77%
+
+
+S2:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S2_rtk_log_in_local_frame_20251212_113250.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_S2_rtk_log_in_local_frame_20251212_113250.csv
+Allowed qualities : [4, 5]
+Total rows        : 222
+Rows kept         : 167
+Rows removed      : 55
+Kept percentage   : 75.23%
+
+
+S3:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S3_rtk_log_in_local_frame_20251212_114031.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_S3_rtk_log_in_local_frame_20251212_114031.csv
+Allowed qualities : [4, 5]
+Total rows        : 107
+Rows kept         : 70
+Rows removed      : 37
+Kept percentage   : 65.42%
+
+
+S4:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S4_rtk_log_in_local_frame_20251212_115046.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_S4_rtk_log_in_local_frame_20251212_115046.csv
+Allowed qualities : [4, 5]
+Total rows        : 198
+Rows kept         : 148
+Rows removed      : 50
+Kept percentage   : 74.75%
+
+
+S5:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S5_rtk_log_in_local_frame_20251212_115545.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_S5_rtk_log_in_local_frame_20251212_115545.csv
+Allowed qualities : [4, 5]
+Total rows        : 151
+Rows kept         : 144
+Rows removed      : 7
+Kept percentage   : 95.36%
+
+
+S6:
+RTK Local-Frame Filtering Complete
+----------------------------------
+Input file        : firmware/rtk_calibration/rtk_data_in_local_frame/day4/test_S6_rtk_log_in_local_frame_20251212_120015.csv
+Output file       : firmware/rtk_calibration/rtk_data_in_local_frame/filtered/day4/filtered_test_S6_rtk_log_in_local_frame_20251212_120015.csv
+Allowed qualities : [4, 5]
+Total rows        : 180
+Rows kept         : 162
+Rows removed      : 18
+Kept percentage   : 90.00%
