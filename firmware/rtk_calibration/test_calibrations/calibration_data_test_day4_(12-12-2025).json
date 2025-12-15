@@ -1,0 +1,41 @@
+{
+    "test_day": 4,
+    "calibration_recording_timestamp": "20251212_093054",
+    "calibration_date": "12-12-2025",
+    "base_station": {
+        "lat": 57.06390633,
+        "lon": 10.0317045,
+        "alt": 40.2
+    },
+    "extra_corners": false,
+    "corner_names": [
+        "corner1",
+        "corner2",
+        "corner3",
+        "corner4"
+    ],
+    "rotation_matrix": [
+        [
+            -0.7565367382266384,
+            0.6530052182053001,
+            -0.03516175066812312
+        ],
+        [
+            -0.6529182165243156,
+            -0.7572700095290533,
+            -0.015489841786606413
+        ],
+        [
+            -0.036741886779336305,
+            0.01123911315521758,
+            0.9992615854176415
+        ]
+    ],
+    "translation_vector": [
+        0.017652664679893515,
+        0.005230002670156678,
+        -42.301508158968616
+    ],
+    "rms_local_error_m": 0.007409779892639134,
+    "description": "Rigid transform (rotation + translation) mapping Local frame to RTK ENU frame"
+}

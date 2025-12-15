@@ -12,8 +12,8 @@ import numpy as np
 # ==============================================
 # Microphone Array Geometry
 # ==============================================
-D_M = 1.0 #0.213          # Edge length of the tetrahedral array [meters]
-SPEED_OF_SOUND = 343.0  # Speed of sound in air [m/s]
+D_M = 0.213 #1.0          # Edge length of the tetrahedral array [meters]
+SPEED_OF_SOUND = 338.371#343.0  # Speed of sound in air [m/s]
 
 def regular_tetrahedron_array(d_m: float) -> np.ndarray:
     """
@@ -74,7 +74,7 @@ INTERP_GCC = 16
 SPEED_OF_SOUND_MODE = "service"     # OR: "fixed"
 
 # Fixed fallback value (used when SPEED_OF_SOUND_MODE = "fixed")
-FIXED_SPEED_OF_SOUND = 343.0        # m/s (20 °C, 50% RH)
+FIXED_SPEED_OF_SOUND = 338.371 #343.0        # m/s (20 °C, 50% RH)
 
 # Serial-based service name
 SPEED_OF_SOUND_SERVICE_NAME = "/get_speed_of_sound"
