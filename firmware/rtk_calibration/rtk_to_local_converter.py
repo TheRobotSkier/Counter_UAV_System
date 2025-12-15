@@ -237,6 +237,8 @@ for name, csv_path in CSV_BATCH.items():
     output_path = os.path.join(OUTPUT_DIR, output_name)
 
     rows_out = []
+    prev_rtk = None
+    removed = 0
 
     with open(csv_path, "r", encoding="utf-8") as f:
         _ = f.readline()  # skip header
@@ -261,6 +263,18 @@ for name, csv_path in CSV_BATCH.items():
             lat, lon, alt, fix_q = parsed
             p_local = enu_to_local(lla_to_enu(lat, lon, alt))
 
+            current_rtk = (lat, lon, alt, fix_q)
+
+            # ------------------------------------------------------------
+            # Drop consecutive duplicate RTK solutions (logging bug)
+            # ------------------------------------------------------------
+            if prev_rtk is not None:
+                if current_rtk == prev_rtk:
+                    removed += 1
+                    continue
+
+            prev_rtk = current_rtk
+
             rows_out.append([
                 timestamp,
                 float(p_local[0]),
@@ -268,6 +282,7 @@ for name, csv_path in CSV_BATCH.items():
                 float(p_local[2]),
                 fix_q,
             ])
+    print(f"  Removed {removed} duplicate RTK samples")
 
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
