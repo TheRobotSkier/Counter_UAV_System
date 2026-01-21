@@ -13,7 +13,7 @@ import math
 # ================= RTK CSV Processing Parameters =================
 # Path for 'test_pp5'
 CSV_FILE_PATH = "C:\Uni\P7\Project\Git_pp\Counter_UAV_System\RTK_Data\fs_2_RTK.csv"
-    
+
 # Time Configuration
 ROSBAG_START_UNIX = 1765461212.783921965
 RTK_TIME_OFFSET = -3600.0  
@@ -243,12 +243,12 @@ class ParticleFilterNode(Node):
         self.aiming_pub = self.create_publisher(Point, '/cmd_point', 10) # <--- RESTORED THIS
 
         # Initialization
-        while True:
-            if self.particle_filter.particles is None and self.Pp_Measure == True:
-                    self.particle_filter.initialize_from_pp(self.latest_pp_data)
-                    break
+        #while True:
+        #    if self.particle_filter.particles is None and self.Pp_Measure == True:
+        #            self.particle_filter.initialize_from_pp(self.latest_pp_data)
+        #            break
         
-        self.timer = self.create_timer(0.05, self.process_update)
+        #self.timer = self.create_timer(0.05, self.process_update)
 
         self.timer_rtk = self.create_timer(0.1, self.RTK_messurement)
 
@@ -267,7 +267,7 @@ class ParticleFilterNode(Node):
         current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
 
-        print(rtk_point)
+        self.get_logger().info(str(rtk_point))
 
     def process_update(self):
 
