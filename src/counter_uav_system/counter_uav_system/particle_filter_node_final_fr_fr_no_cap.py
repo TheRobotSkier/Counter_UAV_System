@@ -42,8 +42,9 @@ IGNORE_START_SECONDS = 15.0
 IGNORE_END_SECONDS = 8.0  
 # =================================================
 
-class RTKDataProcessor:
-    def __init__(self):
+class RTKDataProcessor():
+    def __init__(self, logger):
+        self.logger = logger
         self.rtk_data = self.load_csv(CSV_FILE_PATH)
 
     def load_csv(self, filepath):
@@ -223,7 +224,7 @@ class ParticleFilterNode(Node):
         super().__init__('particle_filter_node')
         
         # Load RTK data
-        self.rtk_processor = RTKDataProcessor()
+        self.rtk_processor = RTKDataProcessor(self.get_logger())
 
         self.declare_parameter('global_frame', 'world')
         self.global_frame = self.get_parameter('global_frame').get_parameter_value().string_value
