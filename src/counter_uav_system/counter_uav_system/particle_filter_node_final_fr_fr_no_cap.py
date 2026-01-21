@@ -49,8 +49,10 @@ class RTKDataProcessor():
         self.logger = logger
         self.rtk_data = self.load_csv(CSV_FILE_PATH)
 
-        self.logger.info(self.rtk_data)
-        
+        self.logger.info(f"Loaded {len(self.rtk_data)} RTK points from {CSV_FILE_PATH}")
+        if self.rtk_data:
+            self.logger.info(f"First RTK point: {self.rtk_data[0]}")
+
     def load_csv(self, filepath):
         data = []
         try:
@@ -291,10 +293,18 @@ class ParticleFilterNode(Node):
         current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
 
-        #theta = self.doa_simulation(rtk_point)
+        if rtk_point is None:
+            self.get_logger().warn(
+                f"RTK lookup failed at t={current_unix_time:.3f}"
+            )
+            return
 
-        self.get_logger().info(f"RTK @ t={current_unix_time:.3f}s")
-        #self.get_logger().info(str(rtk_point))
+        self.get_logger().info(
+            f"RTK @ t={current_unix_time:.3f}s | "
+            f"x={rtk_point['x']:.3f}, "
+            f"y={rtk_point['y']:.3f}, "
+            f"z={rtk_point['z']:.3f}"
+        )
 
     def process_update(self):
 
