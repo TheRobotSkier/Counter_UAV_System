@@ -11,20 +11,20 @@ class SensorSimNode(Node):
     def __init__(self):
         super().__init__('sensor_sim_node')
         
-        # Declare parameters with realistic values from your data
+        # Declare parameters with realistic ranges
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('use_large_array', False),    # True for large array, False for small array
-                ('use_best_pp_case', True),   # Use best PointPillar case (Epoch 20)
+                ('doa_noise_degrees', 5.0),
+                ('pp_noise_meters', 1.0),
                 ('system_x', 0.0),
                 ('system_y', 0.0),
                 ('system_z', 0.0),
                 ('confidence', 0.95),
-                ('doa_range_m', 100.0),        # DOA system range: 100 meters was 90
-                ('pp_range_m', 100.),         # PointPillars range: 100 meters 2as 50
-                ('doa_min_elevation', -20.0),  # Minimum elevation angle (degrees)
-                ('doa_max_elevation', 90.0)    # Maximum elevation angle
+                ('doa_range_m', 90.0),      # DOA system range: 90 meters
+                ('pp_range_m', 70.0),       # PointPillars range: 70 meters
+                ('doa_min_elevation', -10.0),  # Minimum elevation angle (degrees)
+                ('doa_max_elevation', 80.0)    # Maximum elevation angle
             ]
         )
         
@@ -34,9 +34,8 @@ class SensorSimNode(Node):
             self.get_parameter('system_y').value,
             self.get_parameter('system_z').value
         ])
-        
-        self.use_large_array = self.get_parameter('use_large_array').value
-        self.use_best_pp_case = self.get_parameter('use_best_pp_case').value
+        self.doa_noise_level = self.get_parameter('doa_noise_degrees').value
+        self.pp_noise_std = self.get_parameter('pp_noise_meters').value
         self.confidence = self.get_parameter('confidence').value
         
         # Sensor ranges
@@ -46,33 +45,6 @@ class SensorSimNode(Node):
         # DOA field of view constraints
         self.doa_min_elevation = np.deg2rad(self.get_parameter('doa_min_elevation').value)
         self.doa_max_elevation = np.deg2rad(self.get_parameter('doa_max_elevation').value)
-        
-        # ===== REAL UNCERTAINTY FROM DATA =====
-        
-        # DOA SENSOR UNCERTAINTY (≤50m)
-        if self.use_large_array:
-            # Large Array DOA (≤50m)
-            self.doa_azimuth_bias = -1.220  # degrees
-            self.doa_elevation_bias = 12.882  # degrees
-            self.doa_azimuth_std = 52.368  # degrees
-            self.doa_elevation_std = 27.892  # degrees
-            array_name = "LARGE"
-        else:
-            # Small Array DOA (≤50m)
-            self.doa_azimuth_bias = -2.088  # degrees
-            self.doa_elevation_bias = 8.666  # degrees
-            self.doa_azimuth_std = 38.523  # degrees
-            self.doa_elevation_std = 22.233  # degrees
-            array_name = "SMALL"
-        
-        # POINTPILLAR UNCERTAINTY (≤50m)
-        if self.use_best_pp_case:
-            # large model tested at fårup sommerland best chase (test 2) from
-            self.pp_position_bias = np.array([0.0, 0.05, -0.02])  # meters (X, Y, Z)
-            self.pp_position_std = np.array([0.07, 0.03, 0.08])    # meters (X, Y, Z)
-            pp_name = "BEST (test 2)"
-        
-        # ===== END UNCERTAINTY DATA =====
         
         # Subscriber to true drone state
         self.drone_state_sub = self.create_subscription(
@@ -89,16 +61,9 @@ class SensorSimNode(Node):
         # Publisher for sensor status (optional, for debugging)
         self.status_pub = self.create_publisher(String, '/sensors/status', 10)
         
-        # Log sensor configuration
-        self.get_logger().info(f"===== SENSOR SIMULATION CONFIGURATION =====")
-        self.get_logger().info(f"DOA Array: {array_name}")
-        self.get_logger().info(f"  Azimuth: bias={self.doa_azimuth_bias:.2f}°, std={self.doa_azimuth_std:.2f}°")
-        self.get_logger().info(f"  Elevation: bias={self.doa_elevation_bias:.2f}°, std={self.doa_elevation_std:.2f}°")
-        self.get_logger().info(f"PointPillar: {pp_name}")
-        self.get_logger().info(f"  Position bias: [{self.pp_position_bias[0]:.2f}, {self.pp_position_bias[1]:.2f}, {self.pp_position_bias[2]:.2f}] m")
-        self.get_logger().info(f"  Position std: [{self.pp_position_std[0]:.2f}, {self.pp_position_std[1]:.2f}, {self.pp_position_std[2]:.2f}] m")
-        self.get_logger().info(f"Ranges: DOA={self.doa_range}m, PP={self.pp_range}m")
-        self.get_logger().info(f"============================================")
+        self.get_logger().info(f"Sensor simulation started:")
+        self.get_logger().info(f"  DOA Range: {self.doa_range}m, Noise: ±{self.doa_noise_level}°")
+        self.get_logger().info(f"  PP Range: {self.pp_range}m, Noise: ±{self.pp_noise_std}m")
 
     def is_within_doa_range_and_fov(self, position):
         """Check if position is within DOA range and field of view"""
@@ -123,7 +88,7 @@ class SensorSimNode(Node):
         return distance <= self.pp_range, distance
 
     def generate_doa_data(self, true_position):
-        """Generate DOA data with REAL noise characteristics"""
+        """Generate DOA data with noise, only if within range and FOV"""
         in_range, distance, elevation_deg = self.is_within_doa_range_and_fov(true_position)
         
         if not in_range:
@@ -132,49 +97,28 @@ class SensorSimNode(Node):
         vector = true_position - self.system_position
         direction = vector / distance
         
-        # Calculate true angles
-        true_azimuth = np.arctan2(direction[1], direction[0])
-        true_elevation = np.arcsin(direction[2])
+        azimuth = np.arctan2(direction[1], direction[0])
+        elevation = np.arcsin(direction[2])
+        
+        # Add realistic noise
+        azimuth += np.random.normal(0, np.deg2rad(self.doa_noise_level))
+        elevation += np.random.normal(0, np.deg2rad(self.doa_noise_level))
         
         # Convert to degrees
-        true_azimuth_deg = np.rad2deg(true_azimuth)
-        true_elevation_deg = np.rad2deg(true_elevation)
+        azimuth_deg = np.rad2deg(azimuth)
+        elevation_deg = np.rad2deg(elevation)
         
-        # Apply REALISTIC noise model from your data:
-        # 1. Add systematic bias
-        measured_azimuth = true_azimuth_deg + self.doa_azimuth_bias
-        measured_elevation = true_elevation_deg + self.doa_elevation_bias
-        
-        # 2. Add Gaussian noise with correct standard deviation
-        azimuth_noise = np.random.normal(0, self.doa_azimuth_std)
-        elevation_noise = np.random.normal(0, self.doa_elevation_std)
-        
-        measured_azimuth += azimuth_noise
-        measured_elevation += elevation_noise
-        
-        # Wrap azimuth to [-180, 180] degrees
-        measured_azimuth = ((measured_azimuth + 180) % 360) - 180
-        
-        # Clip elevation to reasonable bounds
-        measured_elevation = np.clip(measured_elevation, -90, 90)
-        
-        return (measured_azimuth, measured_elevation), None
+        return (azimuth_deg, elevation_deg), None
 
     def generate_pp_position(self, true_position):
-        """Generate PointPillars data with REAL noise characteristics"""
+        """Generate PointPillars data with noise, only if within range"""
         in_range, distance = self.is_within_pp_range(true_position)
         
         if not in_range:
             return None, f"PP: Out of range ({distance:.1f}m)"
         
-        # Apply REALISTIC noise model from your data:
-        # 1. Add systematic bias
-        biased_position = true_position + self.pp_position_bias
-        
-        # 2. Add Gaussian noise with correct standard deviation for each axis
-        noise = np.random.normal(0, self.pp_position_std)
-        noisy_position = biased_position + noise
-        
+        # Generate noisy position
+        noisy_position = true_position + np.random.normal(0, self.pp_noise_std, 3)
         return noisy_position, None
 
     def drone_state_callback(self, msg):
@@ -196,7 +140,6 @@ class SensorSimNode(Node):
             header.frame_id = "sensor_frame"
             
             status_messages = []
-            distance_to_drone = np.linalg.norm(true_position - self.system_position)
             
             # Generate DOA data (only if within 90m range and FOV)
             doa_data, doa_error = self.generate_doa_data(true_position)
@@ -204,7 +147,7 @@ class SensorSimNode(Node):
             if doa_data is not None:
                 azimuth, elevation = doa_data
                 
-                # Publish DOA data with covariance information
+                # Publish DOA data
                 doa_msg = String()
                 doa_msg.data = json.dumps({
                     'header': {
@@ -216,16 +159,10 @@ class SensorSimNode(Node):
                     },
                     'azimuth': float(azimuth),
                     'elevation': float(elevation),
-                    'true_azimuth': float(np.rad2deg(np.arctan2(true_position[1], true_position[0]))),
-                    'true_elevation': float(np.rad2deg(np.arcsin(true_position[2]/distance_to_drone))) if distance_to_drone > 0 else 0,
-                    'distance': float(distance_to_drone),
-                    'covariance': [float(self.doa_azimuth_std**2), 0.0, float(self.doa_elevation_std**2)],
-                    'bias': [float(self.doa_azimuth_bias), float(self.doa_elevation_bias)],
-                    'in_range': True,
-                    'sensor_type': 'large_array' if self.use_large_array else 'small_array'
+                    'in_range': True
                 })
                 self.doa_pub.publish(doa_msg)
-                status_messages.append(f"DOA: {azimuth:.1f}°, {elevation:.1f}°")
+                status_messages.append("DOA: ✓")
             else:
                 status_messages.append(doa_error)
             
@@ -233,7 +170,7 @@ class SensorSimNode(Node):
             pp_position, pp_error = self.generate_pp_position(true_position)
             
             if pp_position is not None:
-                # Publish PointPillars data with covariance information
+                # Publish PointPillars data
                 pp_msg = String()
                 pp_msg.data = json.dumps({
                     'header': {
@@ -248,19 +185,11 @@ class SensorSimNode(Node):
                         'y': float(pp_position[1]),
                         'z': float(pp_position[2])
                     },
-                    'true_position': {
-                        'x': float(true_position[0]),
-                        'y': float(true_position[1]),
-                        'z': float(true_position[2])
-                    },
-                    'distance': float(distance_to_drone),
-                    'covariance': self.pp_position_std.tolist(),
-                    'bias': self.pp_position_bias.tolist(),
                     'confidence': self.confidence,
                     'in_range': True
                 })
                 self.pp_pub.publish(pp_msg)
-                status_messages.append(f"PP: [{pp_position[0]:.1f}, {pp_position[1]:.1f}, {pp_position[2]:.1f}]")
+                status_messages.append("PP: ✓")
             else:
                 status_messages.append(pp_error)
             
@@ -274,14 +203,13 @@ class SensorSimNode(Node):
                         'y': float(true_position[1]),
                         'z': float(true_position[2])
                     },
-                    'distance': float(distance_to_drone),
+                    'distance': float(np.linalg.norm(true_position - self.system_position)),
                     'status': status_messages
                 })
                 self.status_pub.publish(status_msg)
                 
-                # Log occasionally (every 10 updates)
-                if np.random.random() < 0.1:  # 10% chance to log
-                    self.get_logger().info(f"Drone at {distance_to_drone:.1f}m: {', '.join(status_messages)}")
+                # Log occasionally
+                self.get_logger().debug(f"Sensor status: {', '.join(status_messages)}")
                 
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().error(f"Failed to process drone state: {e}")
