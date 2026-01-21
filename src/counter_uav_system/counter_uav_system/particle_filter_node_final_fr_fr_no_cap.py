@@ -15,7 +15,8 @@ import math
 CSV_FILE_PATH = "C:\Uni\P7\Project\Git_pp\Counter_UAV_System\RTK_Data\fs_2_RTK.csv"
 
 # Time Configuration
-ROSBAG_START_UNIX = 1765461212.783921965
+ROSBAG_START_UNIX = 1765546524.901434980
+                    
 RTK_TIME_OFFSET = -3600.0  
 MANUAL_TIME_SHIFT = 0.0    
 
