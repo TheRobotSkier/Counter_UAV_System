@@ -50,6 +50,7 @@ qtcreator-*
 
 # VS Code
 .vscode/
+settings.json
 
 # Catkin custom files
 CATKIN_IGNORE
