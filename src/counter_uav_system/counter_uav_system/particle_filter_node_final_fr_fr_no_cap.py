@@ -56,7 +56,7 @@ class RTKDataProcessor():
                 reader = csv.DictReader(f)
                 for row in reader:
                     try:
-                        dt = datetime.fromisoformat(row['local_time_utc'].replace('Z', '+00:00'))
+                        dt = datetime.fromisoformat(row['timestamp_utc'].replace('Z', '+00:00'))
                         unix_time = dt.timestamp() + RTK_TIME_OFFSET
                         
                         raw_x = float(row['local_x_m'])
@@ -141,6 +141,27 @@ class ParticleFilter:
         self.velocity_decay = 0.9
         self.position_noise_std = 0.1
         self.position_std = 1.0
+
+    def doa_simulation(self, rtk_point):
+        # vector from sensor to target
+        v = np.array([
+            rtk_point['x'],
+            rtk_point['y'],
+            rtk_point['z']
+        ])
+
+        # normalize
+        v = v / (np.linalg.norm(v) + 1e-9)
+
+        # angular noise (radians)
+        sigma_angle = 0.05  # ~3 degrees
+        noise = np.random.normal(0.0, sigma_angle, 3)
+
+        # perturb direction and renormalize
+        v_noisy = v + noise
+        v_noisy /= np.linalg.norm(v_noisy) + 1e-9
+
+        return v_noisy
         
     def initialize_particles(self, initial_positions, initial_velocities):
         self.particles = np.array(initial_positions)
@@ -268,6 +289,8 @@ class ParticleFilterNode(Node):
         now_ros = self.get_clock().now() 
         current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
+
+        #theta = self.doa_simulation(rtk_point)
 
         self.get_logger().info(str(rtk_point))
 
