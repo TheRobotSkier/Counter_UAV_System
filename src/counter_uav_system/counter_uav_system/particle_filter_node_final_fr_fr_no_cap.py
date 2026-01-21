@@ -12,8 +12,8 @@ import math
 
 # ================= RTK CSV Processing Parameters =================
 # Path for 'test_pp5'
-CSV_FILE_PATH = "Counter_UAV_System-development/firmware/rtk_calibration_2/rtk_data_in_local_frame/day3/test_pp8.csv"
-
+CSV_FILE_PATH = "C:\Uni\P7\Project\Git_pp\Counter_UAV_System\RTK_Data\fs_2_RTK.csv"
+    
 # Time Configuration
 ROSBAG_START_UNIX = 1765461212.783921965
 RTK_TIME_OFFSET = -3600.0  
@@ -265,8 +265,7 @@ class ParticleFilterNode(Node):
         
         now_ros = self.get_clock().now() 
         current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
-
-        rtk_point = self.get_interpolated_rtk(current_unix_time)
+        rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
 
         print(rtk_point)
 
