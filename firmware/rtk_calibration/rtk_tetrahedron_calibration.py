@@ -517,13 +517,18 @@ for name, color in zip(CORNER_NAMES, colors):
 
 # Plot theoretical tetrahedron geometry
 ax.scatter(P_LOCAL[:,0], P_LOCAL[:,1], P_LOCAL[:,2],
-           color="cyan", s=80, label="Theoretical Positions", marker="^")
+           color="cyan", alpha=0.4, s=80, label="Theoretical Positions", marker="^")
 
 ax.set_title("RTK Measurement Spread in LOCAL Frame")
 ax.set_xlabel("Local X [m]")
 ax.set_ylabel("Local Y [m]")
 ax.set_zlabel("Local Z [m]")
-ax.legend()
+#ax.legend()
+ax.legend(
+    loc="center left",
+    bbox_to_anchor=(1.1, 0.5),
+    borderaxespad=0.0
+)
 plt.tight_layout()
 plt.show()
 
@@ -545,14 +550,14 @@ for i, (corner, color) in enumerate(zip(corner_names, colors)):
     # Plot measured points
     ax.scatter(
         pts_local[:,0], pts_local[:,1], pts_local[:,2],
-        s=6, color=color, alpha=0.5,
+        s=6, color=color, #alpha=0.5,
         label=f"{corner} (measured)"
     )
     
     # Plot theoretical tetrahedron corner for this index
     ax.scatter(
         P_LOCAL[i,0], P_LOCAL[i,1], P_LOCAL[i,2],
-        s=120, color=color, marker="^", edgecolors="k",
+        s=120, color=color,alpha=0.4, marker="^", edgecolors="k",
         label=f"{corner} (theoretical)"
     )
 

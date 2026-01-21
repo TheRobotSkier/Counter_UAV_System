@@ -81,8 +81,6 @@ CORNER_A_2_C_2A_MIC_HOLDER_TOP = np.array([-20.0,20.0,60.0]) #From corner 2A on 
 BASE_2_CORNER_1A_GPS = BASE_2_CORNER_1A+CORNER_A_2_C_1A_MIC_HOLDER_TOP+ARRAY_BASE_L_TOP_2_GPS
 BASE_2_CORNER_2A_GPS = BASE_2_CORNER_2A+CORNER_A_2_C_2A_MIC_HOLDER_TOP+ARRAY_BASE_L_TOP_2_GPS
 
-print("BASE_2_CORNER_1A_GPS:", BASE_2_CORNER_1A_GPS)
-print("BASE_2_CORNER_2A_GPS:", BASE_2_CORNER_2A_GPS)
 #------ Pan/Tilt System Transforms and Dimensions ------#
 #Transfroms for the pan/tiltsystem
 BASE_2_PAN_TILT_B = [758.651, 0.341, 0] # From the base station frame to the bottom center of the pantilt system
