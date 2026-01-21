@@ -54,7 +54,7 @@ class RTKDataProcessor():
                 reader = csv.DictReader(f)
                 for row in reader:
                     try:
-                        dt = datetime.fromisoformat(row['timestamp_utc'].replace('Z', '+00:00'))
+                        dt = datetime.fromisoformat(row['local_time_utc'].replace('Z', '+00:00'))
                         unix_time = dt.timestamp() + RTK_TIME_OFFSET
                         
                         raw_x = float(row['local_x_m'])
