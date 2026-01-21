@@ -36,6 +36,7 @@ setup(
             'drone_sim_node = counter_uav_system.drone_sim_node:main',
             'sensor_sim_node = counter_uav_system.sensor_sim_node:main',
             'particle_filter_node = counter_uav_system.particle_filter_node:main',
+            'particle_filter_node_final_fr_fr_no_cap = counter_uav_system.particle_filter_node_final_fr_fr_no_cap:main',
             'data_plotter = counter_uav_system.Data_plotter:main',
             'bbox_adapter_node = counter_uav_system.bbox_adapter_node:main',
         ],
