@@ -293,7 +293,7 @@ class ParticleFilterNode(Node):
 
         #theta = self.doa_simulation(rtk_point)
 
-        self.get_logger().info(f"RTK Time: {current_unix_time}, RTK Point: {rtk_point}")
+        self.get_logger().info(f"RTK @ t={current_unix_time:.3f}s")
         #self.get_logger().info(str(rtk_point))
 
     def process_update(self):
