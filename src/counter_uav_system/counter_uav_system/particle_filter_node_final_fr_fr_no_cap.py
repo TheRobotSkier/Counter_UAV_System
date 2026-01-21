@@ -49,6 +49,8 @@ class RTKDataProcessor():
         self.logger = logger
         self.rtk_data = self.load_csv(CSV_FILE_PATH)
 
+        self.logger.info(self.rtk_data)
+        
     def load_csv(self, filepath):
         data = []
         try:
@@ -129,7 +131,6 @@ class RTKDataProcessor():
             if abs(closest_entry['timestamp'] - query_time) > 0.5:
                 return None
             return closest_entry
-
 
 class ParticleFilter:
     def __init__(self, clock, num_particles=1000):
@@ -292,7 +293,8 @@ class ParticleFilterNode(Node):
 
         #theta = self.doa_simulation(rtk_point)
 
-        self.get_logger().info(str(rtk_point))
+        self.get_logger().info(f"RTK Time: {current_unix_time}, RTK Point: {rtk_point}")
+        #self.get_logger().info(str(rtk_point))
 
     def process_update(self):
 
