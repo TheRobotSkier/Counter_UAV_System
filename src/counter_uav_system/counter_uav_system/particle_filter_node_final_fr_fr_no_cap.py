@@ -11,8 +11,9 @@ from datetime import datetime
 import math
 
 # ================= RTK CSV Processing Parameters =================
-# Path for 'test_pp5'
 CSV_FILE_PATH = "C:\Uni\P7\Project\Git_pp\Counter_UAV_System\RTK_Data\fs_2_RTK.csv"
+
+# This is the where you find the ros bag https://aaudk.sharepoint.com/:f:/r/sites/a_P7_Mobile_Robots/Delte%20dokumenter/General/Tests/Test_Bags/park_t8?csf=1&web=1&e=ODcb37
 
 # Time Configuration
 ROSBAG_START_UNIX = 1765546524.901434980
