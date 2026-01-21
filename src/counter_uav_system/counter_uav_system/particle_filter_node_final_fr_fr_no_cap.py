@@ -137,41 +137,66 @@ class RTKDataProcessor():
 class ParticleFilter:
     def __init__(self, clock, num_particles=1000):
         self.clock = clock
+        self.prevtime = None
+
+        # Initialization parameters
         self.num_particles = num_particles
         self.particles = None
         self.velocities = None
         self.weights = None 
-        self.max_speed = 50.0 
-        self.velocity_decay = 0.9
+        self.doa_range = 50.0
+
+        # Doa simulation parameters
+        self.doa_true_std = 14 * (math.pi / 180)  # From the worksheet DOA test. Optimistic estimate of total angular std in degrees, converted to radians.
+
+        # Prediction parameters
+        self.max_speed = 30.0 
+        self.velocity_decay = 0.95
         self.position_noise_std = 0.1
-        self.position_std = 1.0
+        self.velocity_noise_std = 0.1
+
+        # Measurement parameters 
+        self.pp_std = 1 # From the worksheet pointpillars test. About 1 meter standard deviation on all axis.
+        self.doa_std = 15 * (math.pi / 180) 
 
     def doa_simulation(self, rtk_point):
-        # vector from sensor to target
+        #  Ground truth direction vector
         v = np.array([
             rtk_point['x'],
             rtk_point['y'],
             rtk_point['z']
         ])
-
         # normalize
         v = v / (np.linalg.norm(v) + 1e-9)
 
         # angular noise (radians)
-        sigma_angle = 0.05  # ~3 degrees
-        noise = np.random.normal(0.0, sigma_angle, 3)
-
+        noise = np.random.normal(0.0, self.doa_true_std, 3)
         # perturb direction and renormalize
         v_noisy = v + noise
         v_noisy /= np.linalg.norm(v_noisy) + 1e-9
 
         return v_noisy
-        
-    def initialize_particles(self, initial_positions, initial_velocities):
-        self.particles = np.array(initial_positions)
-        self.velocities = np.array(initial_velocities)
+         
+    def initialize_from_doa(self, doa_measure):
+        # Initialize particles around the doa axis
+        positions = []
+        velocities = []
+        for _ in range(self.num_particles):
+            # Sample position along the DOA axis with noise
+            doa_axis_pos = np.random.uniform(0, self.doa_range, 1) # How far along the doa axis 
+            pos_noise = np.random.normal(0, 10.0, 3) # noise around the doa axis
+            pos = doa_measure * doa_axis_pos + pos_noise   
+            positions.append(pos)
+
+            # Initial random velocity
+            vel = np.random.uniform(-1, 1, 3)
+            velocities.append(vel)
+
+        # Apply initialization
+        self.particles = np.array(positions)
+        self.velocities = np.array(velocities)
         self.weights = np.ones(self.num_particles) / self.num_particles
-        
+    
     def predict(self):
         now = self.clock.now().nanoseconds * 1e-9
         if self.prevtime is None:
@@ -180,19 +205,40 @@ class ParticleFilter:
             dt = now - self.prevtime
 
         # Velocity update with noise and decay
-        Acc_noise = np.random.normal(0, 0.1, (self.num_particles, 3))
+        Acc_noise = np.random.normal(0, self.velocity_noise_std, (self.num_particles, 3))
         self.velocities += Acc_noise * dt
-        self.velocities = self.constrain_velocity(self.velocities * self.velocity_decay)
-
+        self.velocities *= self.velocity_decay 
+        self.velocities = np.clip(self.velocities, -self.max_speed, self.max_speed)
+  
         # Position update with noise
-        Pos_noise = np.random.normal(0, 0.1, (self.num_particles, 3))
+        Pos_noise = np.random.normal(0, self.position_noise_std, (self.num_particles, 3))
         self.particles += (self.velocities * dt) + Pos_noise
 
         self.prevtime = now
 
-    def constrain_velocity(self, velocity):
-        return np.clip(velocity, -self.max_speed, self.max_speed)
-            
+    def update_weights(self, pp_position, doa_measure, use_pp, use_doa):
+        
+        # Pointpillars probabillity 
+        if use_pp:
+            dists = np.linalg.norm(self.particles - pp_position, axis=1)
+            pp_likelihoods = np.exp(-0.5 * (dists / self.pp_std) ** 2)
+        else:
+            pp_likelihoods = np.ones(self.num_particles)
+    
+        # DOA probability
+        if use_doa:
+            doa_vectors = self.particles / (np.linalg.norm(self.particles, axis=1, keepdims=True) + 1e-9)
+            dot_products = np.clip(np.dot(doa_vectors, doa_measure), -1.0, 1.0)
+            angles = np.arccos(dot_products)
+            doa_likelihoods = np.exp(-0.5 * (angles / self.doa_std) ** 2)
+        else:
+            doa_likelihoods = np.ones(self.num_particles)
+
+        # Update weights based on combined likelihoods
+        self.weights *= pp_likelihoods * doa_likelihoods
+        self.weights += 1.e-300 
+        self.weights /= np.sum(self.weights)
+
     def resample(self):
         # Effective sample size
         E_ff = 1.0 / np.sum(self.weights ** 2)
@@ -228,38 +274,23 @@ class ParticleFilter:
         if self.velocities is not None:
             return np.average(self.velocities, weights=self.weights, axis=0)
         return np.array([0., 0., 0.])
-    
-    def initialize_from_pp(self, pp_position):
-        positions = []
-        velocities = []
-        for _ in range(self.num_particles):
-            pos = pp_position + np.random.normal(0, 2.0, 3)
-            vel = np.random.uniform(-1, 1, 3)
-            positions.append(pos)
-            velocities.append(vel)
-        self.initialize_particles(positions, velocities)
-
-    def update_weights(self, pp_position):
-        dists = np.linalg.norm(self.particles - pp_position, axis=1)
-        self.weights *= np.exp(-0.5 * (dists / self.position_std) ** 2)
-        self.weights += 1.e-300 
-        self.weights /= np.sum(self.weights)
-
 
 class ParticleFilterNode(Node):
     def __init__(self):
         super().__init__('particle_filter_node')
         
-        # Load RTK data
+        # Class initializations
         self.rtk_processor = RTKDataProcessor(self.get_logger())
+        self.particle_filter = ParticleFilter(self.get_clock())
 
         self.declare_parameter('global_frame', 'world')
-        self.global_frame = self.get_parameter('global_frame').get_parameter_value().string_value
-        
-        self.particle_filter = ParticleFilter(self.get_clock())
+        self.global_frame = self.get_parameter('global_frame').get_parameter_value().string_value        
+
+        # Messurement Data Holders
         self.latest_pp_data = None
-        self.Pp_Measure: bool = False
-        self.Pp_Doa: bool = False
+        self.latest_DOA_data = None
+        self.pp_Measure: bool = False
+        self.doa_Measure: bool = False
         
         # Subscribers
         self.pp_sub = self.create_subscription(
@@ -267,28 +298,22 @@ class ParticleFilterNode(Node):
         
         # Publishers
         self.vis_pub = self.create_publisher(Marker, '/filter/visualization_marker', 10)
-        self.aiming_pub = self.create_publisher(Point, '/cmd_point', 10) # <--- RESTORED THIS
+        self.aiming_pub = self.create_publisher(Point, '/cmd_point', 10) 
 
-        # Initialization
-        #while True:
-        #    if self.particle_filter.particles is None and self.Pp_Measure == True:
-        #            self.particle_filter.initialize_from_pp(self.latest_pp_data)
-        #            break
+        # DOA Measurement Timer
+        self.timer_rtk = self.create_timer(0.1, self.doa_measurement)             
         
-        #self.timer = self.create_timer(0.05, self.process_update)
-
-        self.timer_rtk = self.create_timer(0.1, self.RTK_messurement)
+        # Particle filter update timer
+        self.timer = self.create_timer(0.05, self.process_update)
 
         self.get_logger().info(f"Particle Filter Node started")
 
     def pp_callback(self, msg):
         self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
+        self.pp_Measure = True
 
-        self.Pp_Measure = True
-
-    def RTK_messurement(self):
-        self.RTK_Measure = True
-        
+    def doa_measurement(self):      
+        # Fetch current RTK ground truth based on ROS time
         now_ros = self.get_clock().now() 
         current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
@@ -299,36 +324,33 @@ class ParticleFilterNode(Node):
             )
             return
 
-        self.get_logger().info(
-            f"RTK @ t={current_unix_time:.3f}s | "
-            f"x={rtk_point['x']:.3f}, "
-            f"y={rtk_point['y']:.3f}, "
-            f"z={rtk_point['z']:.3f}"
-        )
+        # Simulate DOA measurement based on RTK ground truth
+        self.latest_DOA_data = self.particle_filter.doa_simulation(rtk_point) 
+        self.doa_Measure = True
 
     def process_update(self):
 
-        # The ground truth from RTK CSV
+        # Initialization step
+        if self.particle_filter.particles is None:
+            if self.doa_Measure:
+                self.particle_filter.initialize_from_doa(self.latest_DOA_data)
+                self.doa_Measure = False
+            else:
+                return
 
-
-        # Initialization
-        #if self.particle_filter.particles is None and self.Pp_Measure == True:
-        #        self.particle_filter.initialize_from_pp(self.latest_pp_data)
-        #elif self.particle_filter.particles is None:
-        #      return  # Wait until we have initial data to initialize particles
-        
-        # Prediction step
+        # Prediction 
         self.particle_filter.predict() 
 
         # Measurement updates (only runs when sensor gives !!new!! data)
-        if self.Pp_Measure:
-            self.particle_filter.update_weights(self.latest_pp_data)
+        if self.pp_Measure or self.doa_Measure:
+            self.particle_filter.update_weights(self.latest_pp_data, self.latest_DOA_data, self.pp_Measure, self.doa_Measure)
             self.particle_filter.resample()
-            self.Pp_Measure = False
+            self.pp_Measure = False
+            self.doa_Measure = False
 
         estimated_position = self.particle_filter.estimate_position()
         
-        # 1. Publish Aiming Command (RESTORED)
+        # 1. Publish Aiming Command
         aiming_msg = Point()
         aiming_msg.x = float(estimated_position[0])
         aiming_msg.y = float(estimated_position[1])
