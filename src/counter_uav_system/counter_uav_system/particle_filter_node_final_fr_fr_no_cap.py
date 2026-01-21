@@ -83,7 +83,7 @@ class RTKDataProcessor():
                     except ValueError:
                         continue
         except FileNotFoundError:
-            self.get_logger().error(f"File not found: {filepath}")
+            self.logger().error(f"File not found: {filepath}")
 
     def apply_rotation(self, x, y, z):
         """Applies 3D rotation (Euler angles in degrees) to a point."""
