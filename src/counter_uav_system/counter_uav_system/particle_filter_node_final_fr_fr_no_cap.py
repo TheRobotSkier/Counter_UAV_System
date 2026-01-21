@@ -84,6 +84,7 @@ class RTKDataProcessor():
                         data.append(entry)
                     except ValueError:
                         continue
+            return data    
         except FileNotFoundError:
             self.logger.error(f"File not found: {filepath}")
 
@@ -276,7 +277,6 @@ class ParticleFilterNode(Node):
         self.timer_rtk = self.create_timer(0.1, self.RTK_messurement)
 
         self.get_logger().info(f"Particle Filter Node started")
-
 
     def pp_callback(self, msg):
         self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
