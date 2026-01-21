@@ -22,12 +22,12 @@ MANUAL_TIME_SHIFT = 0.0
 # Manual Translations
 MANUAL_TRANS_X = 0.0   
 MANUAL_TRANS_Y = 0.0
-MANUAL_TRANS_Z = -0.5
+MANUAL_TRANS_Z = 0.0
 
 # Manual Rotations (Set to 0.0 as not specified in current config)
 MANUAL_ROT_X = 0.0
 MANUAL_ROT_Y = 0.0
-MANUAL_ROT_Z = 15.0
+MANUAL_ROT_Z = 0.0
 
 # Axis Adjustments
 INVERT_X = True
@@ -249,15 +249,26 @@ class ParticleFilterNode(Node):
                     break
         
         self.timer = self.create_timer(0.05, self.process_update)
-        self.get_logger().info(f"Particle Filter Node started in frame: {self.global_frame}")
+
+        self.timer_rtk = self.create_timer(0.1, self.RTK_messurement)
+
+        self.get_logger().info(f"Particle Filter Node started")
+
 
     def pp_callback(self, msg):
         self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
+
         self.Pp_Measure = True
 
-    #def Doa_callback(self, msg):
-    #    self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
-    #    self.Pp_Measure = True
+    def RTK_messurement(self):
+        self.RTK_Measure = True
+        
+        now_ros = self.get_clock().now() 
+        current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
+
+        rtk_point = self.get_interpolated_rtk(current_unix_time)
+
+        print(rtk_point)
 
     def process_update(self):
 
