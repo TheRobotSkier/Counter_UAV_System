@@ -5,7 +5,7 @@ from rclpy.node import Node
 import numpy as np
 from geometry_msgs.msg import Point
 from uav_interfaces.msg import DroneState, DOAData, PointPillarsData, ParticleFilterState
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 import csv
 from datetime import datetime
 import math
@@ -298,8 +298,7 @@ class ParticleFilterNode(Node):
         self.start_time_true = None
 
         # Subscribers
-        self.pp_sub = self.create_subscription(
-            PointPillarsData, '/pointpillars_bbox', self.pp_callback, 10)
+        self.pp_sub = self.create_subscription(MarkerArray, 'pointpillars_bbox', self.pp_callback, 10)
         
         # Publishers
         self.vis_pub = self.create_publisher(Marker, '/filter/visualization_marker', 10)
@@ -313,15 +312,78 @@ class ParticleFilterNode(Node):
 
         self.get_logger().info(f"Particle Filter Node started")
 
+
+        """
+         header:
+    stamp:
+      sec: 1765461251
+      nanosec: 750484304
+    frame_id: world
+  ns: pointpillars
+  id: 7
+  type: 1
+  action: 0
+  pose:
+    position:
+      x: -29.044164300615247
+      y: -39.861708988663
+      z: 11.979172706604004
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: -0.7133953848727583
+      w: 0.7007617461321993
+  scale:
+    x: 0.9712403416633606
+    y: 0.46437427401542664
+    z: 0.14882056415081024
+  color:
+    r: 1.0
+    g: 1.0
+    b: 0.0
+    a: 0.5
+  lifetime:
+    sec: 0
+    nanosec: 50000000
+  frame_locked: false
+  points: []
+  colors: []
+  texture_resource: ''
+  texture:
+
+
+  [INFO] [1769125568.161115907] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
+[INFO] [1769125568.296795261] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
+[INFO] [1769125568.386061638] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
+[INFO] [1769125568.473705342] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
+[INFO] [1769125568.560207959] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
+        """
+
     def pp_callback(self, msg):
         
+        if len(msg.markers) == 0:
+            return
+        
+        marker = msg.markers[0]
+
+        # Header time
+        header = marker.header
+        stamp = header.stamp
+        self.get_logger().info(f"Raw stamp - sec: {stamp.sec}, nanosec: {stamp.nanosec}")
+
         # Initialization of time
-        self.get_logger().info("PointPillars measurement received")
         if self.start_time_bag is None:
-            self.start_time_bag = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+            self.start_time_bag = marker.header.stamp.sec + marker.header.stamp.nanosec * 1e-9
+            self.get_logger().info(f"Initialized bag start time: {self.start_time_bag:.3f}")
+            
             self.start_time_true = self.get_clock().now()
 
-        self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
+        # Extract xyz from marker pose
+        self.latest_pp_data = np.array([
+            marker.pose.position.x,
+            marker.pose.position.y, 
+            marker.pose.position.z
+        ])
         self.pp_Measure = True
 
     def doa_measurement(self):  
@@ -337,9 +399,7 @@ class ParticleFilterNode(Node):
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
 
         if rtk_point is None:
-            self.get_logger().warn(
-                f"RTK lookup failed at t={current_unix_time:.3f}"
-            )
+            #self.get_logger().warn(f"RTK lookup failed at t={current_unix_time:.3f}")
             return
 
         # Simulate DOA measurement based on RTK ground truth
