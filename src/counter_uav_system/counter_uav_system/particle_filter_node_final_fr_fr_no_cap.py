@@ -11,7 +11,7 @@ from datetime import datetime
 import math
 
 # ================= RTK CSV Processing Parameters =================
-CSV_FILE_PATH = "C:\Uni\P7\Project\Git_pp\Counter_UAV_System\RTK_Data\fs_2_RTK.csv"
+CSV_FILE_PATH = "/home/mort/Counter_UAV_System/RTK_Data/test_pp8_rtk_log_in_local_frame_20251211_145341.csv"
 
 # This is the where you find the ros bag https://aaudk.sharepoint.com/:f:/r/sites/a_P7_Mobile_Robots/Delte%20dokumenter/General/Tests/Test_Bags/park_t8?csf=1&web=1&e=ODcb37
 
@@ -279,10 +279,13 @@ class ParticleFilterNode(Node):
     def __init__(self):
         super().__init__('particle_filter_node')
         
+        
         # Class initializations
         self.rtk_processor = RTKDataProcessor(self.get_logger())
         self.particle_filter = ParticleFilter(self.get_clock())
 
+        # Simulation activation and frame parameters
+        self.declare_parameter('simulate', True)
         self.declare_parameter('global_frame', 'world')
         self.global_frame = self.get_parameter('global_frame').get_parameter_value().string_value        
 
@@ -291,10 +294,12 @@ class ParticleFilterNode(Node):
         self.latest_DOA_data = None
         self.pp_Measure: bool = False
         self.doa_Measure: bool = False
-        
+        self.start_time_bag = None
+        self.start_time_true = None
+
         # Subscribers
         self.pp_sub = self.create_subscription(
-            PointPillarsData, '/sensors/point_pillars', self.pp_callback, 10)
+            PointPillarsData, '/pointpillars_bbox', self.pp_callback, 10)
         
         # Publishers
         self.vis_pub = self.create_publisher(Marker, '/filter/visualization_marker', 10)
@@ -309,13 +314,26 @@ class ParticleFilterNode(Node):
         self.get_logger().info(f"Particle Filter Node started")
 
     def pp_callback(self, msg):
+        
+        # Initialization of time
+        self.get_logger().info("PointPillars measurement received")
+        if self.start_time_bag is None:
+            self.start_time_bag = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+            self.start_time_true = self.get_clock().now()
+
         self.latest_pp_data = np.array([msg.position.x, msg.position.y, msg.position.z])
         self.pp_Measure = True
 
-    def doa_measurement(self):      
+    def doa_measurement(self):  
+
+        # Skip if bag time not initialized
+        if self.start_time_bag is None:
+            return
+            
         # Fetch current RTK ground truth based on ROS time
-        now_ros = self.get_clock().now() 
-        current_unix_time = now_ros.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
+        time_diff = self.get_clock().now() - self.start_time_true
+
+        current_unix_time = self.start_time_bag + time_diff.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
 
         if rtk_point is None:
@@ -329,8 +347,8 @@ class ParticleFilterNode(Node):
         self.doa_Measure = True
 
     def process_update(self):
-
-        # Initialization step
+        
+        # Initialization of Particles 
         if self.particle_filter.particles is None:
             if self.doa_Measure:
                 self.particle_filter.initialize_from_doa(self.latest_DOA_data)
