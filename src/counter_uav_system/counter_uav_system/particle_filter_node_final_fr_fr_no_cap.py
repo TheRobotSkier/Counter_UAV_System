@@ -216,12 +216,21 @@ class ParticleFilter:
 
         self.prevtime = now
 
-    def update_weights(self, pp_position, doa_measure, use_pp, use_doa):
+    def update_weights(self, pp_positions, doa_measure, use_pp, use_doa):
         
         # Pointpillars probabillity 
         if use_pp:
-            dists = np.linalg.norm(self.particles - pp_position, axis=1)
-            pp_likelihoods = np.exp(-0.5 * (dists / self.pp_std) ** 2)
+            combined_likelihoods = np.ones(self.num_particles)
+
+            # Multiply likelihoods from each detection
+            for pp_position in pp_positions:
+                dists = np.linalg.norm(self.particles - pp_position, axis=1)
+                pp_likelihood = np.exp(-0.5 * (dists / self.pp_std) ** 2)
+                combined_likelihoods *= pp_likelihood
+            
+            # Normalize to avoid numerical issues
+            combined_likelihoods = np.clip(combined_likelihoods, 1e-10, 1)
+            pp_likelihoods = combined_likelihoods
         else:
             pp_likelihoods = np.ones(self.num_particles)
     
@@ -352,38 +361,46 @@ class ParticleFilterNode(Node):
   texture:
 
 
-  [INFO] [1769125568.161115907] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
-[INFO] [1769125568.296795261] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
-[INFO] [1769125568.386061638] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
-[INFO] [1769125568.473705342] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
-[INFO] [1769125568.560207959] [particle_filter_node]: Raw stamp - sec: 0, nanosec: 0
         """
 
     def pp_callback(self, msg):
         
-        if len(msg.markers) == 0:
+        markers = msg.markers
+
+        if len(markers) == 0:
             return
         
-        marker = msg.markers[0]
-
-        # Header time
-        header = marker.header
-        stamp = header.stamp
-        self.get_logger().info(f"Raw stamp - sec: {stamp.sec}, nanosec: {stamp.nanosec}")
-
-        # Initialization of time
         if self.start_time_bag is None:
+            # Skip to first valid marker with non-zero time
+            i = 0
+            for i in range(len(markers)):
+                marker = markers[i]
+                # Header time
+                header = marker.header
+                stamp = header.stamp
+
+                if stamp.sec != 0:
+                    break
+            marker = markers[i]
+            stamp = marker.header.stamp
+
             self.start_time_bag = marker.header.stamp.sec + marker.header.stamp.nanosec * 1e-9
             self.get_logger().info(f"Initialized bag start time: {self.start_time_bag:.3f}")
             
             self.start_time_true = self.get_clock().now()
 
-        # Extract xyz from marker pose
-        self.latest_pp_data = np.array([
-            marker.pose.position.x,
-            marker.pose.position.y, 
-            marker.pose.position.z
-        ])
+        # Create list of positions for all markers
+        positions = []
+        for marker in markers:
+            pos = np.array([
+                marker.pose.position.x,
+                marker.pose.position.y, 
+                marker.pose.position.z
+            ])
+            positions.append(pos)
+        
+        # Store as 2D numpy array (N x 3)
+        self.latest_pp_data = np.array(positions)  # Shape: (num_markers, 3)
         self.pp_Measure = True
 
     def doa_measurement(self):  
@@ -394,8 +411,13 @@ class ParticleFilterNode(Node):
             
         # Fetch current RTK ground truth based on ROS time
         time_diff = self.get_clock().now() - self.start_time_true
-
         current_unix_time = self.start_time_bag + time_diff.nanoseconds * 1e-9 + MANUAL_TIME_SHIFT
+
+
+        self.get_logger().info(f"Current Unix time: {current_unix_time:.3f}")
+        self.get_logger().info(f"RTK start time {1765461222}")
+        self.get_logger().info(f"Time difference: {current_unix_time - 1765461222:.3f} seconds")
+
         rtk_point = self.rtk_processor.get_interpolated_rtk(current_unix_time)
 
         if rtk_point is None:
@@ -412,6 +434,7 @@ class ParticleFilterNode(Node):
         if self.particle_filter.particles is None:
             if self.doa_Measure:
                 self.particle_filter.initialize_from_doa(self.latest_DOA_data)
+                self.get_logger().info("Initializing particles from DOA measurement")
                 self.doa_Measure = False
             else:
                 return
